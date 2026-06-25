@@ -26,7 +26,7 @@
   };
 
   const outcomes = [
-    { id: "noAnswer", label: "No answer", icon: "?", kind: "yellow" },
+    { id: "doorsKnocked", label: "Doors Knocked", icon: "?", kind: "yellow" },
     { id: "answered", label: "Answered", icon: "A", kind: "blue" },
     { id: "pitch", label: "Pitch", icon: "P", kind: "purple" },
     { id: "appointment", label: "Go back", icon: "G", kind: "hot" },
@@ -34,12 +34,27 @@
     { id: "sale", label: "Sale", icon: "$", kind: "sale" },
   ];
 
-  const navItems = [
+  const repNav = [
     { id: "dashboard", label: "Home" },
     { id: "log", label: "Log" },
+    { id: "accounts", label: "Accounts" },
     { id: "callbacks", label: "Callbacks" },
     { id: "history", label: "History" },
     { id: "revenue", label: "Revenue" },
+    { id: "settings", label: "Settings" },
+  ];
+
+  const managerNav = [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "leaderboard", label: "Leaderboard" },
+    { id: "reports", label: "Reports" },
+    { id: "settings", label: "Settings" },
+  ];
+
+  const regionalNav = [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "leaderboard", label: "Teams" },
+    { id: "reports", label: "Reports" },
     { id: "settings", label: "Settings" },
   ];
 
@@ -47,12 +62,15 @@
   let session = null;
   let profile = null;
   let teamId = null;
+  let regionId = null;
   let settings = { ...defaultSettings };
   let teamName = "Field Team";
   let teamMembers = [];
   let logs = [];
   let callbacks = [];
   let sales = [];
+  let accounts = [];
+  let allTeams = [];
   let activeTab = location.hash.replace("#", "") || "dashboard";
   let range = "today";
   let clockTimer = null;
@@ -122,35 +140,62 @@
       if (!prof) { profile = null; return; }
       profile = prof;
       teamId = prof.team_id;
+      regionId = prof.region_id;
 
-      const [teamRes, settingsRes, logsRes, cbRes, salesRes, membersRes] = await Promise.all([
-        sb.from("teams").select("name").eq("id", teamId).single(),
-        sb.from("team_settings").select("*").eq("team_id", teamId).single(),
-        sb.from("logs").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
-        sb.from("callbacks").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
-        sb.from("sales").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
-        sb.from("profiles").select("*").eq("team_id", teamId),
-      ]);
+      const isRep = profile.role === "rep";
+      const isManager = profile.role === "manager";
+      const isRegional = profile.role === "regional";
 
-      teamName = teamRes.data?.name || "Field Team";
-      if (settingsRes.data) {
-        const s = settingsRes.data;
-        settings = {
-          app_name: s.app_name || defaultSettings.app_name,
-          daily_door_goal: s.daily_door_goal ?? defaultSettings.daily_door_goal,
-          daily_sales_goal: s.daily_sales_goal ?? defaultSettings.daily_sales_goal,
-          daily_appointment_goal: s.daily_appointment_goal ?? defaultSettings.daily_appointment_goal,
-          daily_revenue_goal: s.daily_revenue_goal ?? defaultSettings.daily_revenue_goal,
-          target_answer_rate: Number(s.target_answer_rate ?? defaultSettings.target_answer_rate),
-          target_pitch_rate: Number(s.target_pitch_rate ?? defaultSettings.target_pitch_rate),
-          target_close_rate: Number(s.target_close_rate ?? defaultSettings.target_close_rate),
-          timezone: s.timezone || defaultSettings.timezone,
-        };
+      let queries = [];
+      if (isRep || isManager) {
+        queries = [
+          sb.from("teams").select("name").eq("id", teamId).single(),
+          sb.from("team_settings").select("*").eq("team_id", teamId).single(),
+          sb.from("logs").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
+          sb.from("callbacks").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
+          sb.from("sales").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
+          sb.from("profiles").select("*").eq("team_id", teamId),
+          sb.from("accounts").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
+        ];
+      } else if (isRegional) {
+        queries = [
+          sb.from("profiles").select("team_id").eq("region_id", regionId),
+          sb.from("logs").select("*").order("created_at", { ascending: false }),
+          sb.from("accounts").select("*").order("created_at", { ascending: false }),
+        ];
       }
-      logs = logsRes.data || [];
-      callbacks = cbRes.data || [];
-      sales = salesRes.data || [];
-      teamMembers = membersRes.data || [];
+
+      const results = await Promise.all(queries);
+
+      if (isRep || isManager) {
+        const [teamRes, settingsRes, logsRes, cbRes, salesRes, membersRes, accountsRes] = results;
+        teamName = teamRes.data?.name || "Field Team";
+        if (settingsRes.data) {
+          const s = settingsRes.data;
+          settings = {
+            app_name: s.app_name || defaultSettings.app_name,
+            daily_door_goal: s.daily_door_goal ?? defaultSettings.daily_door_goal,
+            daily_sales_goal: s.daily_sales_goal ?? defaultSettings.daily_sales_goal,
+            daily_appointment_goal: s.daily_appointment_goal ?? defaultSettings.daily_appointment_goal,
+            daily_revenue_goal: s.daily_revenue_goal ?? defaultSettings.daily_revenue_goal,
+            target_answer_rate: Number(s.target_answer_rate ?? defaultSettings.target_answer_rate),
+            target_pitch_rate: Number(s.target_pitch_rate ?? defaultSettings.target_pitch_rate),
+            target_close_rate: Number(s.target_close_rate ?? defaultSettings.target_close_rate),
+            timezone: s.timezone || defaultSettings.timezone,
+          };
+        }
+        logs = logsRes.data || [];
+        callbacks = cbRes.data || [];
+        sales = salesRes.data || [];
+        teamMembers = membersRes.data || [];
+        accounts = accountsRes.data || [];
+      } else if (isRegional) {
+        const [teamsRes, logsRes, accountsRes] = results;
+        logs = logsRes.data || [];
+        accounts = accountsRes.data || [];
+        allTeams = teamsRes.data || [];
+      }
+
       saveCache();
     } catch (err) {
       console.error("Failed to load from Supabase:", err);

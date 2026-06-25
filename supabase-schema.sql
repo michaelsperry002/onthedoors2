@@ -8,12 +8,20 @@ create table teams (
   created_at timestamptz default now()
 );
 
+-- Regions (for regional managers to oversee multiple teams)
+create table regions (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  created_at timestamptz default now()
+);
+
 -- Profiles (linked to Supabase auth.users)
 create table profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   team_id uuid references teams(id),
+  region_id uuid references regions(id),
   name text not null,
-  role text not null default 'rep' check (role in ('admin','manager','rep')),
+  role text not null default 'rep' check (role in ('admin','regional','manager','rep')),
   disabled boolean default false,
   created_at timestamptz default now()
 );
@@ -73,13 +81,30 @@ create table sales (
   created_at timestamptz default now()
 );
 
+-- Accounts (customer accounts after sale)
+create table accounts (
+  id uuid default gen_random_uuid() primary key,
+  team_id uuid references teams(id) not null,
+  user_id uuid references auth.users(id) not null,
+  customer_name text not null,
+  address text default '',
+  status text default 'active' check (status in ('pending','active','installed','paused','cancelled')),
+  contract_value numeric default 0,
+  install_date text,
+  notes text default '',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 -- Enable Row Level Security on all tables
+alter table regions enable row level security;
 alter table teams enable row level security;
 alter table profiles enable row level security;
 alter table team_settings enable row level security;
 alter table logs enable row level security;
 alter table callbacks enable row level security;
 alter table sales enable row level security;
+alter table accounts enable row level security;
 
 -- RLS Policies
 
@@ -140,4 +165,30 @@ create policy "Team insert sales" on sales for insert with check (
 );
 create policy "Team delete sales" on sales for delete using (
   team_id in (select team_id from profiles where id = auth.uid())
+);
+
+-- Regions
+create policy "Users see their region" on regions for select using (
+  id in (select region_id from profiles where id = auth.uid())
+);
+create policy "Admin sees all regions" on regions for select using (
+  (select role from profiles where id = auth.uid()) = 'admin'
+);
+
+-- Accounts
+create policy "Reps see own accounts" on accounts for select using (
+  user_id = auth.uid()
+);
+create policy "Managers see team accounts" on accounts for select using (
+  team_id in (select team_id from profiles where id = auth.uid())
+);
+create policy "Regional see region accounts" on accounts for select using (
+  team_id in (select team_id from profiles where region_id = (select region_id from profiles where id = auth.uid()))
+  and (select role from profiles where id = auth.uid()) = 'regional'
+);
+create policy "Insert own accounts" on accounts for insert with check (
+  team_id in (select team_id from profiles where id = auth.uid())
+);
+create policy "Update own accounts" on accounts for update using (
+  user_id = auth.uid() or team_id in (select team_id from profiles where id = auth.uid() and role in ('manager','admin'))
 );
