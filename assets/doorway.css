@@ -738,3 +738,35 @@ label {
     width: min(1120px, 100%);
   }
 }
+
+.auth-links {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.auth-links .ghost {
+  font-size: 13px;
+  min-height: 36px;
+}
+
+.copy-row {
+  display: flex;
+  gap: 8px;
+}
+
+.copy-row input {
+  flex: 1;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--muted);
+}
+
+.copy-row button {
+  flex-shrink: 0;
+}
+
+.team-id-box {
+  display: grid;
+  gap: 7px;
+}
