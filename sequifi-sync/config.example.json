@@ -1,0 +1,20 @@
+{
+  "_comment": "Copy this file to 'config.json' and fill in your real values. config.json is git-ignored so your password stays private.",
+
+  "sequifi": {
+    "loginUrl": "https://momentum.sequifi.com/auth",
+    "email": "YOUR_SEQUIFI_EMAIL",
+    "password": "YOUR_SEQUIFI_PASSWORD"
+  },
+
+  "_supabase_comment": "Optional. If you fill these in, synced accounts are pushed to your Supabase database so the app remembers them forever. Leave blank to just write a local accounts.json file instead.",
+  "supabase": {
+    "url": "",
+    "serviceKey": ""
+  },
+
+  "_options_comment": "headless:false shows the browser window (helpful the first few times). Set to true once it works to run silently.",
+  "options": {
+    "headless": false
+  }
+}

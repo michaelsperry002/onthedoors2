@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CORE Kpi's — Demo</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="assets/doorway.css" />
+    <style>
+      /* Floating demo role switcher */
+      .demo-bar {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+        display: flex; gap: 6px; justify-content: center; align-items: center;
+        padding: 6px; background: rgba(8, 8, 8, 0.92);
+        backdrop-filter: blur(8px); border-bottom: 1px solid #262626;
+      }
+      .demo-bar b { font-size: 10px; letter-spacing: 0.12em; color: #8a8a8a; margin-right: 4px; }
+      .demo-bar a {
+        font-size: 12px; text-decoration: none; color: #f5f5f5;
+        padding: 5px 12px; border-radius: 999px; border: 1px solid #262626; background: #141414;
+      }
+      .demo-bar a.on { background: #f5f5f5; color: #050505; font-weight: 600; }
+      body { padding-top: 46px; }
+    </style>
+    <script>
+      // ────────────────────────────────────────────────────────────
+      //  DEMO MODE — in-memory mock of Supabase so the real app runs
+      //  with sample data and fully working buttons. No login needed.
+      // ────────────────────────────────────────────────────────────
+      const params = new URLSearchParams(location.search);
+      const ROLE = params.get("role") || "manager";
+      if (!location.hash) location.hash = "dashboard";
+
+      function pad(n) { return String(n).padStart(2, "0"); }
+      function dkey(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+      let _id = 0;
+      function uid() { return "id" + (_id++) + "_" + Math.random().toString(36).slice(2, 7); }
+
+      const OUT = ["doorsKnocked","doorsKnocked","doorsKnocked","answered","answered","pitch","pitch","appointment","notInterested","sale"];
+      const LABELS = { doorsKnocked:"Doors Knocked", answered:"Answered", pitch:"Pitch", appointment:"Go back", notInterested:"Not interested", sale:"Sale" };
+
+      const teams = [
+        { id: "t1", name: "Phoenix Crew" },
+        { id: "t2", name: "Desert Hawks" },
+        { id: "t3", name: "Valley Strikers" },
+      ];
+      const repNames = {
+        t1: ["Jordan Blake", "Maria Lopez", "Devin Carter", "Sam Patel", "Tyler Nguyen"],
+        t2: ["Alex Rivera", "Priya Shah", "Chris Dunn"],
+        t3: ["Noah Kim", "Bella Cruz", "Marcus Webb"],
+      };
+
+      const profiles = [];
+      const reps = [];
+      teams.forEach((team) => {
+        repNames[team.id].forEach((name) => {
+          const id = uid();
+          reps.push({ id, name, team_id: team.id });
+          profiles.push({ id, team_id: team.id, region_id: "reg1", name, role: "rep", created_at: "2025-02-01T00:00:00Z" });
+        });
+      });
+
+      // The logged-in demo user, depends on role
+      let me;
+      if (ROLE === "rep") {
+        const r = reps.find((x) => x.team_id === "t1");
+        me = { id: "me", team_id: "t1", region_id: "reg1", name: r.name, role: "rep", created_at: "2025-01-15T00:00:00Z" };
+      } else if (ROLE === "regional") {
+        me = { id: "me", team_id: "t1", region_id: "reg1", name: "Michael Sperry", role: "regional", created_at: "2025-01-15T00:00:00Z" };
+      } else {
+        me = { id: "me", team_id: "t1", region_id: "reg1", name: "Michael Sperry", role: "manager", created_at: "2025-01-15T00:00:00Z" };
+      }
+      profiles.unshift(me);
+
+      // Generate 30 days of logs for every rep
+      const logs = [];
+      for (let day = 0; day < 30; day++) {
+        const d = new Date(); d.setDate(d.getDate() - day);
+        const date = dkey(d);
+        reps.forEach((rep, ri) => {
+          const base = rep.team_id === "t1" ? 16 : 10;
+          const knocks = base + ((ri * 5 + day) % 10);
+          for (let k = 0; k < knocks; k++) {
+            const outcome = OUT[(k + ri + day) % OUT.length];
+            const isSale = outcome === "sale";
+            logs.push({
+              id: uid(), team_id: rep.team_id, user_id: rep.id, user_name: rep.name,
+              outcome, label: LABELS[outcome],
+              contract_value: isSale ? 1800 + ((k * 137) % 2600) : 0,
+              customer_name: isSale ? ["Smith","Jones","Brown","Davis","Wilson","Taylor","Clark","Moore","Lee","Hall","Young","King","Wright","Green","Adams","Baker","Hill","Scott","Nelson","Ward"][(k+ri+day)%20] + " Family" : "", address: (100 + k) + " Oak St",
+              notes: "", date, created_at: date + "T1" + pad(k % 9) + ":00:00Z",
+            });
+          }
+        });
+      }
+
+      const STORE = {
+        profiles,
+        teams,
+        team_settings: [{ team_id: "t1", app_name: "CORE Kpi's", daily_door_goal: 100, daily_sales_goal: 2, daily_appointment_goal: 6, daily_revenue_goal: 2500, target_answer_rate: 35, target_pitch_rate: 60, target_close_rate: 12, timezone: "America/Denver" }],
+        logs,
+        callbacks: (() => {
+          const inMin = (m) => new Date(Date.now() + m * 60000).toISOString();
+          return [
+            { id: uid(), team_id: "t1", name: "The Hendersons", address: "812 Pine Ave", date: dkey(new Date()), remind_at: inMin(45), priority: "hot", notes: "Wants to talk to spouse", status: "open", created_at: "2025-06-20T00:00:00Z" },
+            { id: uid(), team_id: "t1", name: "Apt 4B", address: "55 Maple Rd", date: dkey(new Date()), remind_at: inMin(154), priority: "normal", notes: "Come back evening", status: "open", created_at: "2025-06-20T00:00:00Z" },
+            { id: uid(), team_id: "t1", name: "Mr. Garcia", address: "320 Elm St", date: dkey(new Date()), remind_at: inMin(-20), priority: "hot", notes: "Overdue — go now", status: "open", created_at: "2025-06-20T00:00:00Z" },
+            { id: uid(), team_id: "t1", name: "Suite 200", address: "88 Commerce Dr", date: dkey((() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })()), remind_at: inMin(1530), priority: "normal", notes: "After work hours tomorrow", status: "open", created_at: "2025-06-20T00:00:00Z" },
+          ];
+        })(),
+        sales: logs.filter((l) => l.outcome === "sale").map((l) => ({ id: uid(), team_id: l.team_id, customer_name: l.customer_name, address: l.address, value: l.contract_value, user_name: l.user_name, date: l.date, created_at: l.created_at })),
+        accounts: [
+          { id: uid(), team_id: "t1", user_id: "me", customer_name: "The Hendersons", address: "812 Pine Ave", status: "serviced", contract_value: 3200, install_date: "2025-06-10", notes: "Premium package", created_at: "2025-06-01T00:00:00Z" },
+          { id: uid(), team_id: "t1", user_id: "me", customer_name: "R. Williams", address: "240 Cedar Ct", status: "active", contract_value: 2400, install_date: "", notes: "Awaiting install date", created_at: "2025-06-12T00:00:00Z" },
+          { id: uid(), team_id: "t1", user_id: "me", customer_name: "K. Johnson", address: "19 Birch Ln", status: "pending", contract_value: 1900, install_date: "", notes: "Financing approval", created_at: "2025-06-18T00:00:00Z" },
+        ],
+      };
+
+      function makeBuilder(table) {
+        const op = { type: "select", payload: null, filters: {}, inFilter: null, single: false };
+        function match(row) {
+          for (const k in op.filters) { if (row[k] !== op.filters[k]) return false; }
+          if (op.inFilter && !op.inFilter.vals.includes(row[op.inFilter.col])) return false;
+          return true;
+        }
+        function run() {
+          const arr = STORE[table] || (STORE[table] = []);
+          if (op.type === "insert") {
+            const rows = (Array.isArray(op.payload) ? op.payload : [op.payload]).map((r) => ({
+              ...r, id: r.id || uid(), created_at: r.created_at || new Date().toISOString(), updated_at: new Date().toISOString(),
+            }));
+            arr.unshift(...rows);
+            return { data: op.single ? rows[0] : rows, error: null };
+          }
+          if (op.type === "update") {
+            const upd = [];
+            arr.forEach((row) => { if (match(row)) { Object.assign(row, op.payload); upd.push(row); } });
+            return { data: op.single ? upd[0] : upd, error: null };
+          }
+          if (op.type === "delete") {
+            const kept = [], removed = [];
+            arr.forEach((row) => (match(row) ? removed.push(row) : kept.push(row)));
+            STORE[table] = kept;
+            return { data: removed, error: null };
+          }
+          const res = arr.filter(match);
+          return { data: op.single ? res[0] : res, error: null };
+        }
+        const b = {
+          select() { return b; },
+          insert(p) { op.type = "insert"; op.payload = p; return b; },
+          update(p) { op.type = "update"; op.payload = p; return b; },
+          delete() { op.type = "delete"; return b; },
+          eq(col, val) { op.filters[col] = val; return b; },
+          in(col, vals) { op.inFilter = { col, vals }; return b; },
+          order() { return b; },
+          single() { op.single = true; return b; },
+          then(resolve) { resolve(run()); },
+        };
+        return b;
+      }
+
+      window.supabase = {
+        createClient() {
+          return {
+            auth: {
+              async getSession() { return { data: { session: { user: { id: "me" } } } }; },
+              onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
+              async signOut() { return {}; },
+              async signInWithPassword() { return { data: { session: { user: { id: "me" } } }, error: null }; },
+              async signUp() { return { data: { user: { id: "me" }, session: { user: { id: "me" } } }, error: null }; },
+            },
+            from(table) { return makeBuilder(table); },
+          };
+        },
+      };
+      // Seed commission demo data into localStorage
+      const commDemo = { commAccounts: [
+        { id: "ca1", customer_name: "The Hendersons", address: "812 Pine Ave", contract_value: 3200, status: "serviced", sale_date: "2025-03-15", install_date: "2025-04-02", notes: "Premium package", created_at: "2025-03-15T00:00:00Z", source: "sequifi" },
+        { id: "ca2", customer_name: "R. Williams", address: "240 Cedar Ct", contract_value: 2400, status: "active", sale_date: "2025-04-20", install_date: "", notes: "Awaiting install", created_at: "2025-04-20T00:00:00Z", source: "sequifi" },
+        { id: "ca3", customer_name: "K. Johnson", address: "19 Birch Ln", contract_value: 1900, status: "pending", sale_date: "2025-05-10", install_date: "", notes: "Financing approval", created_at: "2025-05-10T00:00:00Z", source: "manual" },
+        { id: "ca4", customer_name: "M. Rodriguez", address: "455 Maple Dr", contract_value: 4100, status: "serviced", sale_date: "2025-02-28", install_date: "2025-03-18", notes: "Large system", created_at: "2025-02-28T00:00:00Z", source: "sequifi" },
+        { id: "ca5", customer_name: "A. Patel", address: "88 Oak Way", contract_value: 2800, status: "serviced", sale_date: "2025-03-22", install_date: "2025-04-10", notes: "", created_at: "2025-03-22T00:00:00Z", source: "sequifi" },
+        { id: "ca6", customer_name: "T. Chen", address: "612 Spruce St", contract_value: 3500, status: "cancelled", sale_date: "2025-01-15", install_date: "2025-02-05", notes: "Customer moved", created_at: "2025-01-15T00:00:00Z", source: "sequifi" },
+        { id: "ca7", customer_name: "B. Foster", address: "330 Elm Rd", contract_value: 2200, status: "sold", sale_date: "2025-06-18", install_date: "", notes: "Credit check pending", created_at: "2025-06-18T00:00:00Z", source: "manual" },
+        { id: "ca8", customer_name: "S. Kim", address: "77 Willow Ln", contract_value: 3800, status: "serviced", sale_date: "2025-04-05", install_date: "2025-04-28", notes: "Referral from Henderson", created_at: "2025-04-05T00:00:00Z", source: "sequifi" },
+        { id: "ca9", customer_name: "D. Murphy", address: "201 Ash Blvd", contract_value: 2600, status: "active", sale_date: "2025-05-25", install_date: "", notes: "Survey complete", created_at: "2025-05-25T00:00:00Z", source: "sequifi" },
+        { id: "ca10", customer_name: "L. Garcia", address: "150 Pine Ct", contract_value: 1800, status: "serviced", sale_date: "2025-05-02", install_date: "2025-05-20", notes: "", created_at: "2025-05-02T00:00:00Z", source: "sequifi" },
+      ]};
+      try { localStorage.setItem("corekpis.comm.v1", JSON.stringify(commDemo)); } catch {}
+    </script>
+  </head>
+  <body>
+    <div class="demo-bar">
+      <b>DEMO</b>
+      <span style="font-size:12px;color:#f5f5f5;padding:5px 12px;border-radius:999px;background:#f5f5f5;color:#050505;font-weight:600" id="role-label"></span>
+    </div>
+    <div id="app"></div>
+    <script>
+      const cur = new URLSearchParams(location.search).get("role") || "manager";
+      document.getElementById("role-label").textContent = cur.charAt(0).toUpperCase() + cur.slice(1);
+    </script>
+    <script src="assets/doorway.js"></script>
+  </body>
+</html>

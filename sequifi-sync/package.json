@@ -1,0 +1,10 @@
+{
+  "name": "sequifi-sync",
+  "version": "1.0.0",
+  "description": "Automatically pulls your accounts from Sequifi and syncs them to your CORE KPIs app.",
+  "type": "module",
+  "scripts": {
+    "sync": "node sync.js"
+  },
+  "dependencies": {}
+}

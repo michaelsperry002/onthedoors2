@@ -1,4 +1,1278 @@
-(function () {
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CORE Kpi's — Demo</title>
+    
+    <style>:root {
+  --bg: #080808;
+  --panel: #111111;
+  --panel-2: #171717;
+  --ink: #f7f7f7;
+  --muted: #8a8a8a;
+  --line: #262626;
+  --primary: #f5f5f5;
+  --primary-ink: #050505;
+  --danger: #ef4444;
+  --good: #22c55e;
+  --hot: #fb923c;
+  --blue: #60a5fa;
+  --purple: #a78bfa;
+  --yellow: #facc15;
+  --pink: #fb7185;
+  --sale: #22c55e;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #0b0b0b;
+  color: var(--ink);
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #777;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+.screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(390px, 100%);
+  display: grid;
+  gap: 18px;
+}
+
+.brand {
+  display: grid;
+  gap: 9px;
+  text-align: center;
+}
+
+.brand small,
+.eyebrow,
+.section-title span,
+label,
+.muted {
+  color: var(--muted);
+}
+
+.brand small,
+.eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.brand h1 {
+  font-size: 36px;
+  letter-spacing: 0;
+}
+
+.card,
+.stat-card,
+.quick-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.card {
+  padding: 16px;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.primary,
+.secondary,
+.ghost,
+.danger {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 800;
+}
+
+.primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.secondary,
+.ghost {
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--ink);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.quick-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.18;
+  background: var(--quick-bg, #ffffff);
+}
+
+.danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.error {
+  min-height: 18px;
+  color: #fca5a5;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.app {
+  width: min(560px, 100%);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 18px 14px 92px;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-end;
+  margin: -18px -14px 16px;
+  padding: 18px 14px 14px;
+  background: rgba(8, 8, 8, 0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(38, 38, 38, 0.85);
+}
+
+.topbar h1 {
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pill,
+.clock-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.clock-pill {
+  color: var(--ink);
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.28), rgba(34, 197, 94, 0.18));
+  border-color: rgba(96, 165, 250, 0.45);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  min-height: 32px;
+  padding: 5px 12px;
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.15), 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.duration-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dur-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dur-chip.on {
+  background: var(--primary);
+  color: var(--primary-ink);
+  border-color: var(--primary);
+}
+
+.countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.section {
+  display: none;
+}
+
+.section.active {
+  display: grid;
+  gap: 14px;
+  animation: fade 0.18s ease-out;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: end;
+}
+
+.section-title h2 {
+  font-size: 24px;
+}
+
+.grid-2,
+.grid-3,
+.grid-4 {
+  display: grid;
+  gap: 8px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stat-card {
+  padding: 12px;
+  min-height: 75px;
+}
+
+.stat-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.stat-card strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 24px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card em {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quick-card {
+  position: relative;
+  min-height: 108px;
+  color: var(--ink);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.quick-hit {
+  width: 100%;
+  min-height: 108px;
+  border: 0;
+  padding: 14px;
+  display: grid;
+  align-content: space-between;
+  gap: 10px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.quick-hit b {
+  font-size: 15px;
+}
+
+.quick-hit span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.quick-hit .icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 900;
+}
+
+.quick-minus {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.42);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.quick-card.sale {
+  border-color: rgba(34, 197, 94, 0.55);
+  --quick-bg: linear-gradient(135deg, #22c55e, #86efac);
+}
+
+.quick-card.hot {
+  border-color: rgba(251, 146, 60, 0.55);
+  --quick-bg: linear-gradient(135deg, #fb923c, #facc15);
+}
+
+.quick-card.blue {
+  border-color: rgba(96, 165, 250, 0.55);
+  --quick-bg: linear-gradient(135deg, #60a5fa, #a78bfa);
+}
+
+.quick-card.purple {
+  border-color: rgba(167, 139, 250, 0.55);
+  --quick-bg: linear-gradient(135deg, #8b5cf6, #ec4899);
+}
+
+.quick-card.red {
+  border-color: rgba(248, 113, 113, 0.55);
+  --quick-bg: linear-gradient(135deg, #ef4444, #fb923c);
+}
+
+.quick-card.yellow {
+  border-color: rgba(250, 204, 21, 0.55);
+  --quick-bg: linear-gradient(135deg, #facc15, #22c55e);
+}
+
+.progress-row,
+.record,
+.user-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(38, 38, 38, 0.75);
+}
+
+.progress-row:last-child,
+.record:last-child,
+.user-row:last-child {
+  border-bottom: 0;
+}
+
+.row-head,
+.record-top,
+.bottom-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.bar {
+  height: 7px;
+  border-radius: 999px;
+  background: #242424;
+  overflow: hidden;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--primary);
+}
+
+.chart-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.chart-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 48px;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  font-size: 12px;
+}
+
+.chart-row b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-row span:last-child {
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-fill {
+  height: 10px;
+  border-radius: 999px;
+  background: #222;
+  overflow: hidden;
+}
+
+.chart-fill i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--fill, linear-gradient(90deg, #f5f5f5, #8a8a8a));
+}
+
+.mini-bars {
+  display: flex;
+  align-items: end;
+  gap: 6px;
+  height: 128px;
+  padding-top: 8px;
+}
+
+.mini-bar {
+  flex: 1;
+  display: grid;
+  align-content: end;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  text-align: center;
+  font-size: 10px;
+}
+
+.mini-bar i {
+  display: block;
+  min-height: 4px;
+  border-radius: 7px 7px 2px 2px;
+  background: linear-gradient(180deg, #f5f5f5, #737373);
+}
+
+.insight-list {
+  display: grid;
+  gap: 10px;
+}
+
+.insight {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #0c0c0c;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+  background: var(--panel);
+}
+
+.tabs button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.tabs button.active {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.form-actions > * {
+  flex: 1;
+}
+
+.record small {
+  color: var(--muted);
+}
+
+.record p {
+  color: #d4d4d4;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.log-record {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+
+.log-record::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.24;
+  background: var(--log-bg, linear-gradient(135deg, #525252, #171717));
+}
+
+.log-record > * {
+  position: relative;
+  z-index: 1;
+}
+
+.log-record.yellow {
+  --log-bg: linear-gradient(135deg, #facc15, #22c55e);
+}
+
+.log-record.blue {
+  --log-bg: linear-gradient(135deg, #60a5fa, #a78bfa);
+}
+
+.log-record.purple {
+  --log-bg: linear-gradient(135deg, #8b5cf6, #ec4899);
+}
+
+.log-record.hot {
+  --log-bg: linear-gradient(135deg, #fb923c, #facc15);
+}
+
+.log-record.red {
+  --log-bg: linear-gradient(135deg, #ef4444, #fb923c);
+}
+
+.log-record.sale {
+  --log-bg: linear-gradient(135deg, #22c55e, #86efac);
+}
+
+.log-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.minus-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.empty {
+  padding: 28px 12px;
+  color: var(--muted);
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+
+.bottom-nav {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 20;
+  width: min(560px, 100%);
+  transform: translateX(-50%);
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  background: rgba(8, 8, 8, 0.94);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(38, 38, 38, 0.9);
+}
+
+.nav-btn {
+  flex: 1;
+  min-height: 48px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  gap: 2px;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.nav-btn.active {
+  background: var(--panel-2);
+  color: var(--ink);
+}
+
+.wide-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.badge-good {
+  color: #86efac;
+}
+
+.badge-hot {
+  color: #fdba74;
+}
+
+.badge-danger {
+  color: #fca5a5;
+}
+
+@media (min-width: 760px) {
+  .app {
+    width: min(1120px, 100%);
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+
+  .topbar {
+    margin-left: -22px;
+    margin-right: -22px;
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+
+  .desktop-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 14px;
+  }
+
+  .quick-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .bottom-nav {
+    width: min(1120px, 100%);
+  }
+}
+
+.auth-links {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.auth-links .ghost {
+  font-size: 13px;
+  min-height: 36px;
+}
+
+.copy-row {
+  display: flex;
+  gap: 8px;
+}
+
+.copy-row input {
+  flex: 1;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--muted);
+}
+
+.copy-row button {
+  flex-shrink: 0;
+}
+
+.team-id-box {
+  display: grid;
+  gap: 7px;
+}
+
+.leaderboard {
+  display: grid;
+  gap: 0;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 80px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(38, 38, 38, 0.75);
+  font-size: 14px;
+}
+
+.leaderboard-row:last-child {
+  border-bottom: 0;
+}
+
+.leaderboard-row .rank {
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.leaderboard-row .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-row .value {
+  text-align: right;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.range-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.range-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.custom-range-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.custom-range-row .primary {
+  min-height: 42px;
+}
+
+.funnel {
+  display: grid;
+  gap: 8px;
+}
+
+.funnel-step {
+  display: grid;
+  gap: 4px;
+}
+
+.funnel-step span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.funnel-bar {
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary-ink);
+  min-width: 40px;
+}
+
+.personal-goals-card {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+/* ════ Mode Toggle Button ════ */
+.mode-toggle {
+  position: fixed;
+  bottom: 78px;
+  left: 14px;
+  z-index: 30;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  transition: background 0.4s, color 0.4s;
+}
+
+.mode-toggle .spin {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid currentColor;
+  border-top-color: transparent;
+  border-right-color: transparent;
+  display: block;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mode-toggle:hover .spin { animation: spin 0.9s linear infinite; }
+.mode-toggle:active { transform: scale(0.92); }
+.mode-toggle:active .spin { transform: rotate(360deg); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ════ Commission Mode (inverted theme) ════ */
+body.comm-mode {
+  --bg: #f5f5f5;
+  --panel: #ffffff;
+  --panel-2: #f0f0f0;
+  --ink: #0a0a0a;
+  --muted: #6b6b6b;
+  --line: #e0e0e0;
+  --primary: #0a0a0a;
+  --primary-ink: #f5f5f5;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  background: var(--bg);
+}
+
+body.comm-mode .topbar {
+  background: rgba(245, 245, 245, 0.92);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+body.comm-mode .bottom-nav {
+  background: rgba(245, 245, 245, 0.96);
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+body.comm-mode .clock-pill {
+  background: linear-gradient(135deg, rgba(16, 96, 200, 0.15), rgba(16, 185, 129, 0.12));
+  border-color: rgba(16, 96, 200, 0.3);
+  color: #0a0a0a;
+}
+
+body.comm-mode .bar > span {
+  background: #0a0a0a;
+}
+
+body.comm-mode .mini-bar i {
+  background: linear-gradient(180deg, #0a0a0a, #6b6b6b);
+}
+
+body.comm-mode input,
+body.comm-mode select,
+body.comm-mode textarea {
+  background: #f8f8f8;
+  border-color: #d4d4d4;
+  color: #0a0a0a;
+}
+
+body.comm-mode .mode-toggle {
+  background: #0a0a0a;
+  color: #f5f5f5;
+  border-color: #333;
+}
+
+body.comm-mode .quick-card::before,
+body.comm-mode .log-record::before {
+  opacity: 0.10;
+}
+
+/* Commission-specific styles */
+.comm-countdown {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.comm-countdown strong {
+  display: block;
+  font-size: 42px;
+  font-variant-numeric: tabular-nums;
+}
+
+.comm-countdown span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.comm-account-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.comm-cancelled {
+  opacity: 0.5;
+}
+
+.comm-status-select {
+  flex: 1;
+  min-height: 36px;
+}
+
+.role-select {
+  width: auto;
+  min-width: 110px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.src-badge {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.15);
+  color: #2563eb;
+}
+
+.src-badge.manual {
+  background: rgba(107, 107, 107, 0.15);
+  color: var(--muted);
+}
+
+.src-badge.edited {
+  background: rgba(250, 204, 21, 0.18);
+  color: #ca8a04;
+}
+
+.comm-editing {
+  border: 1px solid var(--primary);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--panel-2);
+}
+
+.comm-total-card {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.comm-total-card .comm-countdown strong {
+  font-size: 36px;
+  color: #16a34a;
+}
+
+.comm-status-sold { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
+.comm-status-pending { background: rgba(250, 204, 21, 0.15); color: #ca8a04; }
+.comm-status-active { background: rgba(96, 165, 250, 0.15); color: #2563eb; }
+.comm-status-installed { background: rgba(34, 197, 94, 0.15); color: #16a34a; }
+.comm-status-cancelled { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
+</style>
+    <style>
+      /* Floating demo role switcher */
+      .demo-bar {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+        display: flex; gap: 6px; justify-content: center; align-items: center;
+        padding: 6px; background: rgba(8, 8, 8, 0.92);
+        backdrop-filter: blur(8px); border-bottom: 1px solid #262626;
+      }
+      .demo-bar b { font-size: 10px; letter-spacing: 0.12em; color: #8a8a8a; margin-right: 4px; }
+      .demo-bar a {
+        font-size: 12px; text-decoration: none; color: #f5f5f5;
+        padding: 5px 12px; border-radius: 999px; border: 1px solid #262626; background: #141414;
+      }
+      .demo-bar a.on { background: #f5f5f5; color: #050505; font-weight: 600; }
+      body { padding-top: 46px; }
+    </style>
+    <script>
+      // ────────────────────────────────────────────────────────────
+      //  DEMO MODE — in-memory mock of Supabase so the real app runs
+      //  with sample data and fully working buttons. No login needed.
+      // ────────────────────────────────────────────────────────────
+      const params = new URLSearchParams(location.search);
+      const ROLE = params.get("role") || "manager";
+      if (!location.hash) location.hash = "dashboard";
+
+      function pad(n) { return String(n).padStart(2, "0"); }
+      function dkey(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+      let _id = 0;
+      function uid() { return "id" + (_id++) + "_" + Math.random().toString(36).slice(2, 7); }
+
+      const OUT = ["doorsKnocked","doorsKnocked","doorsKnocked","answered","answered","pitch","pitch","appointment","notInterested","sale"];
+      const LABELS = { doorsKnocked:"Doors Knocked", answered:"Answered", pitch:"Pitch", appointment:"Go back", notInterested:"Not interested", sale:"Sale" };
+
+      const teams = [
+        { id: "t1", name: "Phoenix Crew" },
+        { id: "t2", name: "Desert Hawks" },
+        { id: "t3", name: "Valley Strikers" },
+      ];
+      const repNames = {
+        t1: ["Jordan Blake", "Maria Lopez", "Devin Carter", "Sam Patel", "Tyler Nguyen"],
+        t2: ["Alex Rivera", "Priya Shah", "Chris Dunn"],
+        t3: ["Noah Kim", "Bella Cruz", "Marcus Webb"],
+      };
+
+      const profiles = [];
+      const reps = [];
+      teams.forEach((team) => {
+        repNames[team.id].forEach((name) => {
+          const id = uid();
+          reps.push({ id, name, team_id: team.id });
+          profiles.push({ id, team_id: team.id, region_id: "reg1", name, role: "rep", created_at: "2025-02-01T00:00:00Z" });
+        });
+      });
+
+      // The logged-in demo user, depends on role
+      let me;
+      if (ROLE === "rep") {
+        const r = reps.find((x) => x.team_id === "t1");
+        me = { id: "me", team_id: "t1", region_id: "reg1", name: r.name, role: "rep", created_at: "2025-01-15T00:00:00Z" };
+      } else if (ROLE === "regional") {
+        me = { id: "me", team_id: "t1", region_id: "reg1", name: "Michael Sperry", role: "regional", created_at: "2025-01-15T00:00:00Z" };
+      } else {
+        me = { id: "me", team_id: "t1", region_id: "reg1", name: "Michael Sperry", role: "manager", created_at: "2025-01-15T00:00:00Z" };
+      }
+      profiles.unshift(me);
+
+      // Generate 30 days of logs for every rep
+      const logs = [];
+      for (let day = 0; day < 30; day++) {
+        const d = new Date(); d.setDate(d.getDate() - day);
+        const date = dkey(d);
+        reps.forEach((rep, ri) => {
+          const base = rep.team_id === "t1" ? 16 : 10;
+          const knocks = base + ((ri * 5 + day) % 10);
+          for (let k = 0; k < knocks; k++) {
+            const outcome = OUT[(k + ri + day) % OUT.length];
+            const isSale = outcome === "sale";
+            logs.push({
+              id: uid(), team_id: rep.team_id, user_id: rep.id, user_name: rep.name,
+              outcome, label: LABELS[outcome],
+              contract_value: isSale ? 1800 + ((k * 137) % 2600) : 0,
+              customer_name: isSale ? "Customer " + uid() : "", address: (100 + k) + " Oak St",
+              notes: "", date, created_at: date + "T1" + pad(k % 9) + ":00:00Z",
+            });
+          }
+        });
+      }
+
+      const STORE = {
+        profiles,
+        teams,
+        team_settings: [{ team_id: "t1", app_name: "CORE Kpi's", daily_door_goal: 100, daily_sales_goal: 2, daily_appointment_goal: 6, daily_revenue_goal: 2500, target_answer_rate: 35, target_pitch_rate: 60, target_close_rate: 12, timezone: "America/Denver" }],
+        logs,
+        callbacks: (() => {
+          const inMin = (m) => new Date(Date.now() + m * 60000).toISOString();
+          return [
+            { id: uid(), team_id: "t1", name: "The Hendersons", address: "812 Pine Ave", date: dkey(new Date()), remind_at: inMin(45), priority: "hot", notes: "Wants to talk to spouse", status: "open", created_at: "2025-06-20T00:00:00Z" },
+            { id: uid(), team_id: "t1", name: "Apt 4B", address: "55 Maple Rd", date: dkey(new Date()), remind_at: inMin(154), priority: "normal", notes: "Come back evening", status: "open", created_at: "2025-06-20T00:00:00Z" },
+            { id: uid(), team_id: "t1", name: "Mr. Garcia", address: "320 Elm St", date: dkey(new Date()), remind_at: inMin(-20), priority: "hot", notes: "Overdue — go now", status: "open", created_at: "2025-06-20T00:00:00Z" },
+            { id: uid(), team_id: "t1", name: "Suite 200", address: "88 Commerce Dr", date: dkey((() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })()), remind_at: inMin(1530), priority: "normal", notes: "After work hours tomorrow", status: "open", created_at: "2025-06-20T00:00:00Z" },
+          ];
+        })(),
+        sales: logs.filter((l) => l.outcome === "sale").map((l) => ({ id: uid(), team_id: l.team_id, customer_name: l.customer_name, address: l.address, value: l.contract_value, user_name: l.user_name, date: l.date, created_at: l.created_at })),
+        accounts: [
+          { id: uid(), team_id: "t1", user_id: "me", customer_name: "The Hendersons", address: "812 Pine Ave", status: "serviced", contract_value: 3200, install_date: "2025-06-10", notes: "Premium package", created_at: "2025-06-01T00:00:00Z" },
+          { id: uid(), team_id: "t1", user_id: "me", customer_name: "R. Williams", address: "240 Cedar Ct", status: "active", contract_value: 2400, install_date: "", notes: "Awaiting install date", created_at: "2025-06-12T00:00:00Z" },
+          { id: uid(), team_id: "t1", user_id: "me", customer_name: "K. Johnson", address: "19 Birch Ln", status: "pending", contract_value: 1900, install_date: "", notes: "Financing approval", created_at: "2025-06-18T00:00:00Z" },
+        ],
+      };
+
+      function makeBuilder(table) {
+        const op = { type: "select", payload: null, filters: {}, inFilter: null, single: false };
+        function match(row) {
+          for (const k in op.filters) { if (row[k] !== op.filters[k]) return false; }
+          if (op.inFilter && !op.inFilter.vals.includes(row[op.inFilter.col])) return false;
+          return true;
+        }
+        function run() {
+          const arr = STORE[table] || (STORE[table] = []);
+          if (op.type === "insert") {
+            const rows = (Array.isArray(op.payload) ? op.payload : [op.payload]).map((r) => ({
+              ...r, id: r.id || uid(), created_at: r.created_at || new Date().toISOString(), updated_at: new Date().toISOString(),
+            }));
+            arr.unshift(...rows);
+            return { data: op.single ? rows[0] : rows, error: null };
+          }
+          if (op.type === "update") {
+            const upd = [];
+            arr.forEach((row) => { if (match(row)) { Object.assign(row, op.payload); upd.push(row); } });
+            return { data: op.single ? upd[0] : upd, error: null };
+          }
+          if (op.type === "delete") {
+            const kept = [], removed = [];
+            arr.forEach((row) => (match(row) ? removed.push(row) : kept.push(row)));
+            STORE[table] = kept;
+            return { data: removed, error: null };
+          }
+          const res = arr.filter(match);
+          return { data: op.single ? res[0] : res, error: null };
+        }
+        const b = {
+          select() { return b; },
+          insert(p) { op.type = "insert"; op.payload = p; return b; },
+          update(p) { op.type = "update"; op.payload = p; return b; },
+          delete() { op.type = "delete"; return b; },
+          eq(col, val) { op.filters[col] = val; return b; },
+          in(col, vals) { op.inFilter = { col, vals }; return b; },
+          order() { return b; },
+          single() { op.single = true; return b; },
+          then(resolve) { resolve(run()); },
+        };
+        return b;
+      }
+
+      window.supabase = {
+        createClient() {
+          return {
+            auth: {
+              async getSession() { return { data: { session: { user: { id: "me" } } } }; },
+              onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
+              async signOut() { return {}; },
+              async signInWithPassword() { return { data: { session: { user: { id: "me" } } }, error: null }; },
+              async signUp() { return { data: { user: { id: "me" }, session: { user: { id: "me" } } }, error: null }; },
+            },
+            from(table) { return makeBuilder(table); },
+          };
+        },
+      };
+      // Seed commission demo data into localStorage
+      const commDemo = { commAccounts: [
+        { id: "ca1", customer_name: "The Hendersons", address: "812 Pine Ave", contract_value: 3200, status: "serviced", sale_date: "2025-03-15", install_date: "2025-04-02", notes: "Premium package", created_at: "2025-03-15T00:00:00Z", source: "sequifi" },
+        { id: "ca2", customer_name: "R. Williams", address: "240 Cedar Ct", contract_value: 2400, status: "active", sale_date: "2025-04-20", install_date: "", notes: "Awaiting install", created_at: "2025-04-20T00:00:00Z", source: "sequifi" },
+        { id: "ca3", customer_name: "K. Johnson", address: "19 Birch Ln", contract_value: 1900, status: "pending", sale_date: "2025-05-10", install_date: "", notes: "Financing approval", created_at: "2025-05-10T00:00:00Z", source: "manual" },
+        { id: "ca4", customer_name: "M. Rodriguez", address: "455 Maple Dr", contract_value: 4100, status: "serviced", sale_date: "2025-02-28", install_date: "2025-03-18", notes: "Large system", created_at: "2025-02-28T00:00:00Z", source: "sequifi" },
+        { id: "ca5", customer_name: "A. Patel", address: "88 Oak Way", contract_value: 2800, status: "serviced", sale_date: "2025-03-22", install_date: "2025-04-10", notes: "", created_at: "2025-03-22T00:00:00Z", source: "sequifi" },
+        { id: "ca6", customer_name: "T. Chen", address: "612 Spruce St", contract_value: 3500, status: "cancelled", sale_date: "2025-01-15", install_date: "2025-02-05", notes: "Customer moved", created_at: "2025-01-15T00:00:00Z", source: "sequifi" },
+        { id: "ca7", customer_name: "B. Foster", address: "330 Elm Rd", contract_value: 2200, status: "sold", sale_date: "2025-06-18", install_date: "", notes: "Credit check pending", created_at: "2025-06-18T00:00:00Z", source: "manual" },
+        { id: "ca8", customer_name: "S. Kim", address: "77 Willow Ln", contract_value: 3800, status: "serviced", sale_date: "2025-04-05", install_date: "2025-04-28", notes: "Referral from Henderson", created_at: "2025-04-05T00:00:00Z", source: "sequifi" },
+        { id: "ca9", customer_name: "D. Murphy", address: "201 Ash Blvd", contract_value: 2600, status: "active", sale_date: "2025-05-25", install_date: "", notes: "Survey complete", created_at: "2025-05-25T00:00:00Z", source: "sequifi" },
+        { id: "ca10", customer_name: "L. Garcia", address: "150 Pine Ct", contract_value: 1800, status: "serviced", sale_date: "2025-05-02", install_date: "2025-05-20", notes: "", created_at: "2025-05-02T00:00:00Z", source: "sequifi" },
+      ]};
+      try { localStorage.setItem("corekpis.comm.v1", JSON.stringify(commDemo)); } catch {}
+    </script>
+  </head>
+  <body>
+    <div class="demo-bar">
+      <b>DEMO</b>
+      <span style="font-size:12px;color:#f5f5f5;padding:5px 12px;border-radius:999px;background:#f5f5f5;color:#050505;font-weight:600" id="role-label"></span>
+    </div>
+    <div id="app"></div>
+    <script>
+      const cur = new URLSearchParams(location.search).get("role") || "manager";
+      document.getElementById("role-label").textContent = cur.charAt(0).toUpperCase() + cur.slice(1);
+    </script>
+    <script>(function () {
   // ── Supabase Config ─────────────────────────────────────────────
   // Replace these two values with your Supabase project credentials.
   // Find them at: Supabase Dashboard → Settings → API
@@ -37,8 +1311,9 @@
   const repNav = [
     { id: "dashboard", label: "Home" },
     { id: "log", label: "Log" },
-    { id: "callbacks", label: "Callbacks" },
+    { id: "schedule", label: "Schedule" },
     { id: "accounts", label: "Accounts" },
+    { id: "callbacks", label: "Callbacks" },
     { id: "revenue", label: "Revenue" },
     { id: "settings", label: "Settings" },
   ];
@@ -368,7 +1643,7 @@
 
     let sections = "";
     if (isRep) {
-      sections = `${renderDashboard()}${renderLog()}${renderCallbacks()}${renderAccounts()}${renderRevenue()}${renderSettings()}`;
+      sections = `${renderDashboard()}${renderLog()}${renderSchedule()}${renderAccounts()}${renderCallbacks()}${renderRevenue()}${renderSettings()}`;
     } else if (isManager) {
       sections = `${renderManagerDashboard()}${renderLeaderboard()}${renderReports()}${renderSettings()}`;
     } else if (isRegional) {
@@ -649,39 +1924,12 @@
   function renderCallbacks() {
     const open = callbacks.filter((c) => c.status !== "done").sort((a, b) => cbWhen(a) - cbWhen(b));
     const presets = [["30 min", 0, 30], ["1 hr", 1, 0], ["2 hr", 2, 0], ["4 hr", 4, 0], ["Tomorrow", 24, 0]];
-    const schedule = getSchedule();
-    const endOfToday = startOfDay(new Date()).getTime() + 86400000;
-    const upcoming = callbacks.filter((c) => c.status !== "done" && cbWhen(c) >= endOfToday)
-      .sort((a, b) => cbWhen(a) - cbWhen(b))
-      .slice(0, 10);
     return `
       <section id="callbacks" class="section ${activeTab === "callbacks" ? "active" : ""}">
         <div class="section-title">
-          <div><h2>Callbacks</h2><span>Schedule & timers</span></div>
+          <div><h2>Callbacks</h2><span>Set a timer to come back.</span></div>
         </div>
         <section class="card stack">
-          <div class="section-title"><h3>Today</h3><span>${schedule.length} events</span></div>
-          ${schedule.length ? schedule.map(scheduleRecord).join("") : empty("Nothing scheduled for today.")}
-        </section>
-        <section class="card stack">
-          <div class="section-title"><h3>Upcoming</h3><span>Next callbacks</span></div>
-          ${upcoming.length ? upcoming.map((c) => {
-            const when = cbWhen(c);
-            const atStr = new Date(when).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
-            const cd = countdownLabel(when);
-            return `<article class="record">
-              <div class="record-top">
-                <strong>${escapeHtml(c.name)}</strong>
-                <span class="countdown ${c.priority === "hot" ? "badge-hot" : "badge-good"}" data-remind-at="${when}">${cd.text}</span>
-              </div>
-              <small>Come back ${escapeHtml(atStr)}</small>
-              ${c.address ? `<small>${escapeHtml(c.address)}</small>` : ""}
-              ${c.notes ? `<p>${escapeHtml(c.notes)}</p>` : ""}
-            </article>`;
-          }).join("") : empty("No upcoming callbacks.")}
-        </section>
-        <section class="card stack">
-          <div class="section-title"><h3>New Callback</h3><span>Set a timer</span></div>
           <div class="form-grid">
             <label>Name <input id="cbName" placeholder="Homeowner name" /></label>
             <label>Address <input id="cbAddress" placeholder="123 Oak Street" /></label>
@@ -2422,3 +3670,6 @@
 
   init();
 })();
+</script>
+  </body>
+</html>
