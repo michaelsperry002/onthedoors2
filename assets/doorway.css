@@ -1,21 +1,21 @@
 :root {
-  --bg: #080808;
-  --panel: #111111;
-  --panel-2: #171717;
-  --ink: #f7f7f7;
-  --muted: #8a8a8a;
-  --line: #262626;
-  --primary: #f5f5f5;
-  --primary-ink: #050505;
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --panel-2: #f1f3f6;
+  --ink: #14151a;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --primary: #14151a;
+  --primary-ink: #ffffff;
   --danger: #ef4444;
-  --good: #22c55e;
-  --hot: #fb923c;
-  --blue: #60a5fa;
-  --purple: #a78bfa;
-  --yellow: #facc15;
+  --good: #16a34a;
+  --hot: #f97316;
+  --blue: #2563eb;
+  --purple: #8b5cf6;
+  --yellow: #eab308;
   --pink: #fb7185;
-  --sale: #22c55e;
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --sale: #16a34a;
+  --shadow: 0 8px 30px rgba(20, 21, 26, 0.08);
 }
 
 * {
@@ -43,6 +43,24 @@ textarea {
 
 button {
   cursor: pointer;
+  transition: transform 0.12s ease, background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+.card, .stat-card, .quick-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.record, .progress-row, .user-row {
+  animation: fadeUp 0.25s ease-out both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 input,
@@ -52,7 +70,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
-  background: #0b0b0b;
+  background: #fafafa;
   color: var(--ink);
   outline: none;
 }
@@ -60,8 +78,8 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #777;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+  border-color: #9ca3af;
+  box-shadow: 0 0 0 3px rgba(20, 21, 26, 0.06);
 }
 
 textarea {
@@ -207,9 +225,9 @@ label {
   align-items: flex-end;
   margin: -18px -14px 16px;
   padding: 18px 14px 14px;
-  background: rgba(8, 8, 8, 0.92);
+  background: rgba(247, 248, 250, 0.92);
   backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(38, 38, 38, 0.85);
+  border-bottom: 1px solid rgba(20, 21, 26, 0.08);
 }
 
 .topbar h1 {
@@ -455,7 +473,7 @@ label {
   display: grid;
   gap: 8px;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(38, 38, 38, 0.75);
+  border-bottom: 1px solid var(--line);
 }
 
 .progress-row:last-child,
@@ -481,7 +499,7 @@ label {
 .bar {
   height: 7px;
   border-radius: 999px;
-  background: #242424;
+  background: var(--panel-2);
   overflow: hidden;
 }
 
@@ -522,7 +540,7 @@ label {
 .chart-fill {
   height: 10px;
   border-radius: 999px;
-  background: #222;
+  background: var(--panel-2);
   overflow: hidden;
 }
 
@@ -569,7 +587,7 @@ label {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
-  background: #0c0c0c;
+  background: var(--panel-2);
 }
 
 .tabs {
@@ -701,14 +719,15 @@ label {
   width: min(560px, 100%);
   transform: translateX(-50%);
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-  background: rgba(8, 8, 8, 0.94);
+  background: rgba(247, 248, 250, 0.94);
   backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(38, 38, 38, 0.9);
+  border-top: 1px solid rgba(20, 21, 26, 0.08);
+  overflow-x: auto;
 }
 
 .nav-btn {
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 auto;
+  min-width: 60px;
   min-height: 44px;
   border: 0;
   border-radius: 8px;
@@ -717,12 +736,15 @@ label {
   display: grid;
   gap: 2px;
   place-items: center;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 4px 2px;
+  padding: 4px 10px;
+  scroll-snap-align: start;
+}
+
+.bottom-nav {
+  scroll-snap-type: x proximity;
 }
 
 .nav-btn.active {
@@ -825,7 +847,7 @@ label {
   gap: 12px;
   align-items: center;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(38, 38, 38, 0.75);
+  border-bottom: 1px solid var(--line);
   font-size: 14px;
 }
 
@@ -909,90 +931,35 @@ label {
   bottom: 78px;
   left: 14px;
   z-index: 30;
-  width: 46px;
-  height: 46px;
-  border: 1px solid var(--line);
+  width: 50px;
+  height: 50px;
+  border: 1.5px solid var(--ink);
   border-radius: 50%;
   background: var(--panel);
   color: var(--ink);
   display: grid;
   place-items: center;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-  transition: background 0.4s, color 0.4s;
+  box-shadow: 0 4px 16px rgba(20, 21, 26, 0.18);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s, color 0.3s;
 }
 
-.mode-toggle .spin {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2.5px solid currentColor;
-  border-top-color: transparent;
-  border-right-color: transparent;
-  display: block;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.mode-toggle:hover .spin { animation: spin 0.9s linear infinite; }
-.mode-toggle:active { transform: scale(0.92); }
-.mode-toggle:active .spin { transform: rotate(360deg); }
+.mode-toggle svg { display: block; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+.mode-toggle:hover svg { transform: rotate(180deg); }
+.mode-toggle:active { transform: scale(0.9); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ════ Commission Mode (inverted theme) ════ */
-body.comm-mode {
-  --bg: #f5f5f5;
-  --panel: #ffffff;
-  --panel-2: #f0f0f0;
-  --ink: #0a0a0a;
-  --muted: #6b6b6b;
-  --line: #e0e0e0;
-  --primary: #0a0a0a;
-  --primary-ink: #f5f5f5;
-  --shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-  background: var(--bg);
-}
-
-body.comm-mode .topbar {
-  background: rgba(245, 245, 245, 0.92);
-  border-bottom-color: rgba(0, 0, 0, 0.08);
-}
-
-body.comm-mode .bottom-nav {
-  background: rgba(245, 245, 245, 0.96);
-  border-top-color: rgba(0, 0, 0, 0.08);
-}
-
+/* ════ Commission Mode ════ */
 body.comm-mode .clock-pill {
   background: linear-gradient(135deg, rgba(16, 96, 200, 0.15), rgba(16, 185, 129, 0.12));
   border-color: rgba(16, 96, 200, 0.3);
-  color: #0a0a0a;
-}
-
-body.comm-mode .bar > span {
-  background: #0a0a0a;
-}
-
-body.comm-mode .mini-bar i {
-  background: linear-gradient(180deg, #0a0a0a, #6b6b6b);
-}
-
-body.comm-mode input,
-body.comm-mode select,
-body.comm-mode textarea {
-  background: #f8f8f8;
-  border-color: #d4d4d4;
-  color: #0a0a0a;
+  color: var(--ink);
 }
 
 body.comm-mode .mode-toggle {
-  background: #0a0a0a;
-  color: #f5f5f5;
-  border-color: #333;
-}
-
-body.comm-mode .quick-card::before,
-body.comm-mode .log-record::before {
-  opacity: 0.10;
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
 }
 
 /* Commission-specific styles */
@@ -1080,3 +1047,67 @@ body.comm-mode .log-record::before {
 .comm-status-active { background: rgba(96, 165, 250, 0.15); color: #2563eb; }
 .comm-status-installed { background: rgba(34, 197, 94, 0.15); color: #16a34a; }
 .comm-status-cancelled { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
+
+/* ════ Calendar Tab ════ */
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cal-header button {
+  min-height: 34px;
+  padding: 4px 14px;
+  font-size: 18px;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.cal-weekdays {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.cal-cell {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.cal-cell:not(.empty):hover { background: var(--panel-2); }
+.cal-cell:active { transform: scale(0.92); }
+.cal-cell.empty { visibility: hidden; }
+.cal-cell.today { border-color: var(--ink); }
+.cal-cell.selected { background: var(--primary); color: var(--primary-ink); }
+
+.cal-dot {
+  position: absolute;
+  bottom: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--hot);
+}
+
+.cal-cell.selected .cal-dot { background: var(--primary-ink); }
+
+/* ════ Quick Log icon pop ════ */
+.quick-hit .icon {
+  font-size: 20px;
+  background: rgba(255, 255, 255, 0.35);
+}

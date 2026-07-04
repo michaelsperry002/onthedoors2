@@ -26,18 +26,19 @@
   };
 
   const outcomes = [
-    { id: "doorsKnocked", label: "Doors Knocked", icon: "?", kind: "yellow" },
-    { id: "answered", label: "Answered", icon: "A", kind: "blue" },
-    { id: "pitch", label: "Pitch", icon: "P", kind: "purple" },
-    { id: "appointment", label: "Go back", icon: "G", kind: "hot" },
-    { id: "notInterested", label: "Not interested", icon: "X", kind: "red" },
-    { id: "sale", label: "Sale", icon: "$", kind: "sale" },
+    { id: "doorsKnocked", label: "Doors Knocked", icon: "🚪", kind: "yellow" },
+    { id: "answered", label: "Answered", icon: "🔵", kind: "blue" },
+    { id: "pitch", label: "Pitch", icon: "🔵", kind: "purple" },
+    { id: "appointment", label: "Go back", icon: "🔵", kind: "hot" },
+    { id: "notInterested", label: "Not interested", icon: "❌", kind: "red" },
+    { id: "sale", label: "Sale", icon: "✅", kind: "sale" },
   ];
 
   const repNav = [
-    { id: "dashboard", label: "Home" },
+    { id: "dashboard", label: "Dashboard" },
     { id: "log", label: "Log" },
     { id: "callbacks", label: "Callbacks" },
+    { id: "calendar", label: "Calendar" },
     { id: "accounts", label: "Accounts" },
     { id: "revenue", label: "Revenue" },
     { id: "settings", label: "Settings" },
@@ -46,6 +47,7 @@
   const managerNav = [
     { id: "dashboard", label: "Dashboard" },
     { id: "leaderboard", label: "Leaderboard" },
+    { id: "recruits", label: "Recruits" },
     { id: "reports", label: "Reports" },
     { id: "settings", label: "Settings" },
   ];
@@ -99,6 +101,7 @@
       render();
     });
     clockTimer = setInterval(updateClock, 1000);
+    requestNotificationPermission();
 
     loadCache();
     render();
@@ -361,16 +364,21 @@
   }
 
   function renderApp() {
-    const isRep = profile.role === "rep" || profile.role === "admin";
+    const isAdmin = profile.role === "admin";
+    const isRep = profile.role === "rep" || isAdmin;
     const isManager = profile.role === "manager";
     const isRegional = profile.role === "regional";
-    const nav = isRep ? repNav : isManager || isRegional ? managerNav : repNav;
+    const nav = isAdmin ? [...repNav, { id: "recruits", label: "Recruits" }]
+      : isRep ? repNav
+      : isManager || isRegional ? managerNav
+      : repNav;
 
     let sections = "";
     if (isRep) {
-      sections = `${renderDashboard()}${renderLog()}${renderCallbacks()}${renderAccounts()}${renderRevenue()}${renderSettings()}`;
+      sections = `${renderDashboard()}${renderLog()}${renderCallbacks()}${renderCalendar()}${renderAccounts()}${renderRevenue()}${renderSettings()}`;
+      if (isAdmin) sections += renderRecruits();
     } else if (isManager) {
-      sections = `${renderManagerDashboard()}${renderLeaderboard()}${renderReports()}${renderSettings()}`;
+      sections = `${renderManagerDashboard()}${renderLeaderboard()}${renderRecruits()}${renderReports()}${renderSettings()}`;
     } else if (isRegional) {
       sections = `${renderRegionalDashboard()}${renderRegionalLeaderboard()}${renderReports()}${renderSettings()}`;
     }
@@ -389,7 +397,7 @@
         </header>
         ${sections}
       </main>
-      <button class="mode-toggle" id="modeToggle" type="button" aria-label="Switch to Commission view"><span class="spin"></span></button>
+      <button class="mode-toggle" id="modeToggle" type="button" aria-label="Switch to Commission view">${switchIconSvg()}</button>
       <nav class="bottom-nav">
         ${nav.map((item) => `
           <button class="nav-btn ${activeTab === item.id ? "active" : ""}" data-tab="${item.id}" type="button">
@@ -715,6 +723,122 @@
   }
   function toMinutes(t) { const [h, m] = String(t).split(":").map(Number); return (h || 0) * 60 + (m || 0); }
 
+  // ── Calendar ────────────────────────────────────────────────────
+  let calendarMonth = new Date().getFullYear() * 12 + new Date().getMonth();
+  let calendarSelectedDay = todayKey();
+
+  function renderCalendar() {
+    const year = Math.floor(calendarMonth / 12);
+    const month = calendarMonth % 12;
+    const firstOfMonth = new Date(year, month, 1);
+    const startWeekday = firstOfMonth.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthLabel = firstOfMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+    const byDay = {};
+    callbacks.filter((c) => c.status !== "done").forEach((c) => {
+      const key = c.date || dkeyFromDate(new Date(cbWhen(c)));
+      (byDay[key] = byDay[key] || []).push(c);
+    });
+    accounts.filter((a) => a.install_date && a.status !== "cancelled").forEach((a) => {
+      (byDay[a.install_date] = byDay[a.install_date] || []).push({ name: a.customer_name, isInstall: true });
+    });
+
+    let cells = "";
+    for (let i = 0; i < startWeekday; i++) cells += `<div class="cal-cell empty"></div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const items = byDay[key] || [];
+      const isToday = key === todayKey();
+      const isSelected = key === calendarSelectedDay;
+      cells += `
+        <button class="cal-cell ${isToday ? "today" : ""} ${isSelected ? "selected" : ""} ${items.length ? "has-events" : ""}" data-cal-day="${key}" type="button">
+          <span>${d}</span>
+          ${items.length ? `<i class="cal-dot"></i>` : ""}
+        </button>`;
+    }
+
+    const selectedItems = byDay[calendarSelectedDay] || [];
+
+    return `
+      <section id="calendar" class="section ${activeTab === "calendar" ? "active" : ""}">
+        <div class="section-title">
+          <div><h2>Calendar</h2><span>Callbacks & installs.</span></div>
+        </div>
+        <section class="card stack">
+          <div class="cal-header">
+            <button class="secondary" id="calPrev" type="button">‹</button>
+            <strong>${monthLabel}</strong>
+            <button class="secondary" id="calNext" type="button">›</button>
+          </div>
+          <div class="cal-grid cal-weekdays">
+            <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
+          </div>
+          <div class="cal-grid">${cells}</div>
+        </section>
+        <section class="card stack">
+          <div class="section-title"><h3>${escapeHtml(new Date(calendarSelectedDay + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))}</h3><span>${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}</span></div>
+          ${selectedItems.length ? selectedItems.map((c) => `
+            <article class="record">
+              <div class="record-top">
+                <strong>${escapeHtml(c.name)}</strong>
+                ${c.isInstall ? `<span class="badge-good">Install</span>` : `<span class="${c.priority === "hot" ? "badge-hot" : "badge-good"}">Callback</span>`}
+              </div>
+              ${c.address ? `<small>${escapeHtml(c.address)}</small>` : ""}
+              ${c.notes ? `<p>${escapeHtml(c.notes)}</p>` : ""}
+            </article>`).join("") : empty("Nothing on this day.")}
+        </section>
+      </section>`;
+  }
+
+  // ── Recruits (admin/manager team roster) ─────────────────────────
+  function renderRecruits() {
+    const rows = teamMembers.map((m) => {
+      const memberLogs = logs.filter((l) => l.user_id === m.id);
+      const doors = memberLogs.length;
+      const sales = memberLogs.filter((l) => l.outcome === "sale").length;
+      const answered = memberLogs.filter((l) => ["answered", "pitch", "appointment", "sale"].includes(l.outcome)).length;
+      const closeRate = answered ? Math.round((sales / answered) * 100) : 0;
+      const revenue = memberLogs.reduce((s, l) => s + Number(l.contract_value || 0), 0);
+      return { ...m, doors, sales, closeRate, revenue };
+    }).sort((a, b) => b.revenue - a.revenue);
+
+    return `
+      <section id="recruits" class="section ${activeTab === "recruits" ? "active" : ""}">
+        <div class="section-title">
+          <div><h2>Recruits</h2><span>${rows.length} on your team</span></div>
+        </div>
+        <section class="card stack">
+          <div class="section-title"><h3>Invite a Recruit</h3><span>Share your Team ID</span></div>
+          <div class="team-id-box">
+            <label>Team ID</label>
+            <div class="copy-row">
+              <input id="recruitTeamIdDisplay" value="${escapeAttr(teamId)}" readonly />
+              <button id="recruitCopyTeamId" class="secondary" type="button">Copy</button>
+            </div>
+          </div>
+          <p class="muted">Have them tap "Join existing team" on the sign-in screen and paste this ID.</p>
+        </section>
+        <section class="card stack">
+          <div class="section-title"><h3>Roster</h3><span>Sorted by revenue</span></div>
+          ${rows.length ? rows.map((r) => `
+            <article class="record">
+              <div class="record-top">
+                <strong>${escapeHtml(r.name)}</strong>
+                <span class="pill">${escapeHtml(r.role)}</span>
+              </div>
+              <div class="comm-account-meta">
+                <span>${r.doors} doors</span>
+                <span>${r.sales} sales</span>
+                <span>${r.closeRate}% close</span>
+                <span>${money(r.revenue)}</span>
+              </div>
+              <small>Joined ${new Date(r.created_at).toLocaleDateString()}</small>
+            </article>`).join("") : empty("No recruits yet. Share your Team ID to get started.")}
+        </section>
+      </section>`;
+  }
+
   // ── Schedule ────────────────────────────────────────────────────
   function renderSchedule() {
     const schedule = getSchedule();
@@ -818,6 +942,7 @@
         </div>
         <section class="card stack">
           <h3>Profile</h3>
+          ${isAdmin ? `
           <label>App name <input id="appName" value="${escapeAttr(settings.app_name)}" /></label>
           <label>Team name <input id="teamNameInput" value="${escapeAttr(teamName)}" /></label>
           <label>Clock timezone
@@ -832,6 +957,15 @@
             <label>Revenue goal <input id="dailyRevenueGoal" type="number" value="${settings.daily_revenue_goal}" /></label>
           </div>
           <button id="saveSettings" class="primary" type="button">Save Settings</button>
+          ` : `
+          <div class="grid-2">
+            ${stat("Door goal", settings.daily_door_goal, "daily")}
+            ${stat("Sales goal", settings.daily_sales_goal, "daily")}
+            ${stat("Go back goal", settings.daily_appointment_goal, "daily")}
+            ${stat("Revenue goal", money(settings.daily_revenue_goal), "daily")}
+          </div>
+          <p class="muted">Goals are locked to keep everyone's stats honest. Ask your admin to make changes.</p>
+          `}
         </section>
         ${isAdmin ? `
           <section class="card stack">
@@ -1232,6 +1366,16 @@
 
     document.querySelectorAll("[data-set-role]").forEach((sel) => {
       sel.addEventListener("change", () => setMemberRole(sel.dataset.setRole, sel.value));
+    });
+
+    bind("#calPrev", "click", () => { calendarMonth--; render(); });
+    bind("#calNext", "click", () => { calendarMonth++; render(); });
+    document.querySelectorAll("[data-cal-day]").forEach((btn) => {
+      btn.addEventListener("click", () => { calendarSelectedDay = btn.dataset.calDay; render(); });
+    });
+    bind("#recruitCopyTeamId", "click", () => {
+      const input = document.querySelector("#recruitTeamIdDisplay");
+      if (input) { navigator.clipboard.writeText(input.value).catch(() => {}); }
     });
   }
 
@@ -1840,6 +1984,53 @@
     const node = document.querySelector("#topClock");
     if (node) node.textContent = clockText();
     updateCountdowns();
+    checkCallbackAlarms();
+  }
+
+  // ── Callback Alarms ──────────────────────────────────────────────
+  const firedAlarms = new Set();
+  function checkCallbackAlarms() {
+    const now = Date.now();
+    callbacks.forEach((c) => {
+      if (c.status === "done" || !c.remind_at) return;
+      const when = new Date(c.remind_at).getTime();
+      if (when <= now && when > now - 60000 && !firedAlarms.has(c.id)) {
+        firedAlarms.add(c.id);
+        fireCallbackAlarm(c);
+      }
+    });
+  }
+
+  function fireCallbackAlarm(c) {
+    playAlarmBeep();
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      try { new Notification("Callback time!", { body: `${c.name || "Callback"} - ${c.address || ""}`.trim() }); } catch { /* ignore */ }
+    }
+  }
+
+  function playAlarmBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.3, 0.6].forEach((delay) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.001, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + delay + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.3);
+      });
+    } catch { /* ignore */ }
+  }
+
+  function requestNotificationPermission() {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
   }
 
   function timezoneOptions() {
@@ -1852,6 +2043,14 @@
       { value: "America/Anchorage", label: "Alaska" },
       { value: "Pacific/Honolulu", label: "Hawaii" },
     ];
+  }
+
+  function switchIconSvg() {
+    return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="10.5" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M7 9.5h8.5M15.5 9.5L12.5 6.5M15.5 9.5L12.5 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M17 14.5H8.5M8.5 14.5L11.5 11.5M8.5 14.5L11.5 17.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
   }
 
   function go(tab) { activeTab = tab; location.hash = tab; render(); }
@@ -1897,7 +2096,7 @@
         </header>
         ${commSections}
       </main>
-      <button class="mode-toggle mode-toggle-comm" id="modeToggle" type="button" aria-label="Switch to Field view"><span class="spin"></span></button>
+      <button class="mode-toggle mode-toggle-comm" id="modeToggle" type="button" aria-label="Switch to Field view">${switchIconSvg()}</button>
       <nav class="bottom-nav">
         ${commNav.map((item) => `
           <button class="nav-btn ${commTab === item.id ? "active" : ""}" data-comm-tab="${item.id}" type="button">
