@@ -361,7 +361,7 @@
   }
 
   function renderApp() {
-    const isRep = profile.role === "rep";
+    const isRep = profile.role === "rep" || profile.role === "admin";
     const isManager = profile.role === "manager";
     const isRegional = profile.role === "regional";
     const nav = isRep ? repNav : isManager || isRegional ? managerNav : repNav;
