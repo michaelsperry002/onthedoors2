@@ -9,7 +9,7 @@
 
   // ── Constants ───────────────────────────────────────────────────
   const CACHE_KEY = "corekpis.cache.v1";
-  const todayKey = () => new Date().toISOString().slice(0, 10);
+  const todayKey = () => dkeyFromDate(new Date());
   const money = (v) =>
     Number(v || 0).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
@@ -27,9 +27,9 @@
 
   const outcomes = [
     { id: "doorsKnocked", label: "Doors Knocked", icon: "🚪", kind: "yellow" },
-    { id: "answered", label: "Answered", icon: "🔵", kind: "blue" },
-    { id: "pitch", label: "Pitch", icon: "🔵", kind: "purple" },
-    { id: "appointment", label: "Go back", icon: "🔵", kind: "hot" },
+    { id: "answered", label: "Answered", icon: "🗣️", kind: "blue" },
+    { id: "pitch", label: "Pitch", icon: "📋", kind: "purple" },
+    { id: "appointment", label: "Go back", icon: "🔁", kind: "hot" },
     { id: "notInterested", label: "Not interested", icon: "❌", kind: "red" },
     { id: "sale", label: "Sale", icon: "✅", kind: "sale" },
   ];
@@ -66,12 +66,15 @@
   let regionId = null;
   let settings = { ...defaultSettings };
   let teamName = "Field Team";
+  let teamShortCode = "";
   let teamMembers = [];
   let logs = [];
   let callbacks = [];
   let sales = [];
   let accounts = [];
   let allTeams = [];
+  let orgTeams = [];
+  let orgProfiles = [];
   let activeTab = location.hash.replace("#", "") || "dashboard";
   let range = "today";
   let customFrom = "";
@@ -204,7 +207,7 @@
       } else {
         // Rep / Manager / Admin: everything scoped to their own team.
         const [teamRes, settingsRes, logsRes, cbRes, salesRes, membersRes, accountsRes] = await Promise.all([
-          sb.from("teams").select("name").eq("id", teamId).single(),
+          sb.from("teams").select("name, short_code").eq("id", teamId).single(),
           sb.from("team_settings").select("*").eq("team_id", teamId).single(),
           sb.from("logs").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
           sb.from("callbacks").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
@@ -214,12 +217,22 @@
         ]);
 
         teamName = teamRes.data?.name || "Field Team";
+        teamShortCode = teamRes.data?.short_code || "";
         applySettings(settingsRes.data);
         logs = logsRes.data || [];
         callbacks = cbRes.data || [];
         sales = salesRes.data || [];
         teamMembers = membersRes.data || [];
         accounts = accountsRes.data || [];
+
+        if (profile.role === "admin") {
+          const [orgTeamsRes, orgProfilesRes] = await Promise.all([
+            sb.from("teams").select("*").order("created_at", { ascending: true }),
+            sb.from("profiles").select("*"),
+          ]);
+          orgTeams = orgTeamsRes.data || [];
+          orgProfiles = orgProfilesRes.data || [];
+        }
       }
       saveCache();
     } catch (err) {
@@ -228,13 +241,21 @@
   }
 
   // ── Auth ─────────────────────────────────────────────────────────
+  // Short, easy-to-say/type team code (no ambiguous chars like O/0/I/1).
+  function generateShortCode() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
   async function handleSignUp(name, email, password, newTeamName) {
     authError = "";
     const { data, error } = await sb.auth.signUp({ email, password });
     if (error) { authError = error.message; render(); return; }
     if (!data.user) { authError = "Check your email to confirm your account."; render(); return; }
 
-    const { data: team, error: teamErr } = await sb.from("teams").insert({ name: newTeamName || "Field Team" }).select().single();
+    const { data: team, error: teamErr } = await sb.from("teams").insert({ name: newTeamName || "Field Team", short_code: generateShortCode() }).select().single();
     if (teamErr) { authError = teamErr.message; render(); return; }
 
     const { error: profErr } = await sb.from("profiles").insert({
@@ -261,16 +282,20 @@
     render();
   }
 
-  async function handleJoinTeam(name, email, password, joinTeamId) {
+  async function handleJoinTeam(name, email, password, joinCode, recruiterName) {
     authError = "";
+    const code = joinCode.trim().toUpperCase();
+    const { data: team, error: teamErr } = await sb.from("teams").select("id").eq("short_code", code).single();
+    if (teamErr || !team) { authError = "Team code not found. Double-check with your recruiter."; render(); return; }
+
     const { data, error } = await sb.auth.signUp({ email, password });
     if (error) { authError = error.message; render(); return; }
     if (!data.user) { authError = "Check your email to confirm your account."; render(); return; }
 
     const { error: profErr } = await sb.from("profiles").insert({
-      id: data.user.id, team_id: joinTeamId, name, role: "rep",
+      id: data.user.id, team_id: team.id, name, role: "rep", recruited_by_name: recruiterName || "",
     });
-    if (profErr) { authError = "Invalid Team ID or error joining team."; render(); return; }
+    if (profErr) { authError = "Error joining team."; render(); return; }
 
     session = data.session;
     await loadFromSupabase();
@@ -304,8 +329,17 @@
       return;
     }
     if (!session || !profile) return renderAuth();
-    if (appMode === "commission") return renderCommApp();
-    renderApp();
+    if (appMode === "commission") renderCommApp(); else renderApp();
+    animateBars();
+  }
+
+  // Bars render at width:0 then animate to their real percentage on the
+  // next frame, giving progress bars a sliding fill-in feel each render.
+  function animateBars() {
+    const bars = document.querySelectorAll(".bar > span[data-pct], .chart-fill i[data-pct]");
+    requestAnimationFrame(() => {
+      bars.forEach((el) => { el.style.width = el.dataset.pct + "%"; });
+    });
   }
 
   function toggleAppMode() {
@@ -325,14 +359,15 @@
           <div class="brand">
             <small>CORE Kpi's</small>
             <h1>${isLogin ? "Sign In" : isSignup ? "Create Account" : "Join a Team"}</h1>
-            <p class="muted">${isLogin ? "Sign in to your account." : isSignup ? "Start a new team." : "Join an existing team with a Team ID."}</p>
+            <p class="muted">${isLogin ? "Sign in to your account." : isSignup ? "Start a new team." : "Join an existing team with a Team Code."}</p>
           </div>
           <div class="card stack">
             ${!isLogin ? `<label>Your name <input id="authName" autocomplete="name" placeholder="Michael Sperry" /></label>` : ""}
             <label>Email <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" /></label>
             <label>Password <input id="authPassword" type="password" autocomplete="${isLogin ? "current-password" : "new-password"}" placeholder="••••••••" /></label>
             ${isSignup ? `<label>Team name <input id="authTeamName" placeholder="My Sales Team" /></label>` : ""}
-            ${isJoin ? `<label>Team ID <input id="authTeamId" placeholder="Paste team ID from your admin" /></label>` : ""}
+            ${isJoin ? `<label>Team Code <input id="authTeamId" placeholder="e.g. BLU492" style="text-transform:uppercase" /></label>` : ""}
+            ${isJoin ? `<label>Who recruited you? <input id="authRecruiter" placeholder="Their name" /></label>` : ""}
             <p id="authError" class="error">${escapeHtml(authError)}</p>
             <button id="authSubmit" class="primary" type="button">
               ${isLogin ? "Sign In" : isSignup ? "Create Account" : "Join Team"}
@@ -355,7 +390,7 @@
       if (!email || !password) { authError = "Enter email and password."; render(); return; }
       if (isLogin) await handleSignIn(email, password);
       else if (isSignup) await handleSignUp(val("#authName").trim() || "User", email, password, val("#authTeamName").trim());
-      else await handleJoinTeam(val("#authName").trim() || "User", email, password, val("#authTeamId").trim());
+      else await handleJoinTeam(val("#authName").trim() || "User", email, password, val("#authTeamId").trim(), val("#authRecruiter").trim());
     });
 
     document.querySelectorAll("[data-auth-mode]").forEach((btn) => {
@@ -410,6 +445,14 @@
       btn.addEventListener("click", () => go(btn.dataset.tab));
     });
     bindCommonEvents();
+    scrollActiveNavIntoView();
+  }
+
+  // Re-rendering rebuilds the nav bar from scratch, which would otherwise
+  // reset its scroll position and hide the tab the user just tapped.
+  function scrollActiveNavIntoView() {
+    const activeBtn = document.querySelector(".nav-btn.active");
+    if (activeBtn) activeBtn.scrollIntoView({ behavior: "auto", inline: "nearest", block: "nearest" });
   }
 
   // ── Dashboard ───────────────────────────────────────────────────
@@ -613,7 +656,7 @@
             <label>Address <input id="address" placeholder="123 Oak Street" /></label>
             <label>Callback date <input id="callbackDate" type="date" /></label>
             <label>Priority
-              <select id="priority"><option value="normal">Normal</option><option value="hot">Hot</option></select>
+              <select id="priority">${priorityOptionsHtml("low")}</select>
             </label>
             <label>Notes <textarea id="notes" placeholder="Optional note for this knock"></textarea></label>
           </div>
@@ -680,7 +723,7 @@
             return `<article class="record">
               <div class="record-top">
                 <strong>${escapeHtml(c.name)}</strong>
-                <span class="countdown ${c.priority === "hot" ? "badge-hot" : "badge-good"}" data-remind-at="${when}">${cd.text}</span>
+                <span class="countdown ${priorityInfo(c.priority).badge}" data-remind-at="${when}">${cd.text}</span>
               </div>
               <small>Come back ${escapeHtml(atStr)}</small>
               ${c.address ? `<small>${escapeHtml(c.address)}</small>` : ""}
@@ -702,7 +745,7 @@
               <label>Minutes <input id="cbMins" type="number" min="0" max="59" value="0" /></label>
             </div>
             <label>Priority
-              <select id="cbPriority"><option value="normal">Normal</option><option value="hot">Hot</option></select>
+              <select id="cbPriority">${priorityOptionsHtml("low")}</select>
             </label>
             <label>Notes <textarea id="cbNotes" placeholder="What should you remember?"></textarea></label>
             <button id="addCallback" class="primary" type="button">Set Callback Timer</button>
@@ -758,7 +801,7 @@
         </button>`;
     }
 
-    const selectedItems = byDay[calendarSelectedDay] || [];
+    const selectedItems = (byDay[calendarSelectedDay] || []).slice().sort((a, b) => new Date(a.remind_at || 0) - new Date(b.remind_at || 0));
 
     return `
       <section id="calendar" class="section ${activeTab === "calendar" ? "active" : ""}">
@@ -778,30 +821,37 @@
         </section>
         <section class="card stack">
           <div class="section-title"><h3>${escapeHtml(new Date(calendarSelectedDay + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))}</h3><span>${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}</span></div>
-          ${selectedItems.length ? selectedItems.map((c) => `
+          ${selectedItems.length ? selectedItems.map((c) => {
+            const timeStr = c.remind_at ? new Date(c.remind_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "";
+            return `
             <article class="record">
               <div class="record-top">
                 <strong>${escapeHtml(c.name)}</strong>
-                ${c.isInstall ? `<span class="badge-good">Install</span>` : `<span class="${c.priority === "hot" ? "badge-hot" : "badge-good"}">Callback</span>`}
+                ${c.isInstall ? `<span class="badge-good">Install</span>` : priorityBadge(c.priority)}
               </div>
+              ${timeStr ? `<small>${escapeHtml(timeStr)}</small>` : ""}
               ${c.address ? `<small>${escapeHtml(c.address)}</small>` : ""}
               ${c.notes ? `<p>${escapeHtml(c.notes)}</p>` : ""}
-            </article>`).join("") : empty("Nothing on this day.")}
+            </article>`;
+          }).join("") : empty("Nothing on this day.")}
         </section>
       </section>`;
   }
 
   // ── Recruits (admin/manager team roster) ─────────────────────────
+  function statsForMember(m) {
+    const memberLogs = logs.filter((l) => l.user_id === m.id);
+    const doors = memberLogs.length;
+    const sales = memberLogs.filter((l) => l.outcome === "sale").length;
+    const answered = memberLogs.filter((l) => ["answered", "pitch", "appointment", "sale"].includes(l.outcome)).length;
+    const closeRate = answered ? Math.round((sales / answered) * 100) : 0;
+    const revenue = memberLogs.reduce((s, l) => s + Number(l.contract_value || 0), 0);
+    return { ...m, doors, sales, closeRate, revenue };
+  }
+
   function renderRecruits() {
-    const rows = teamMembers.map((m) => {
-      const memberLogs = logs.filter((l) => l.user_id === m.id);
-      const doors = memberLogs.length;
-      const sales = memberLogs.filter((l) => l.outcome === "sale").length;
-      const answered = memberLogs.filter((l) => ["answered", "pitch", "appointment", "sale"].includes(l.outcome)).length;
-      const closeRate = answered ? Math.round((sales / answered) * 100) : 0;
-      const revenue = memberLogs.reduce((s, l) => s + Number(l.contract_value || 0), 0);
-      return { ...m, doors, sales, closeRate, revenue };
-    }).sort((a, b) => b.revenue - a.revenue);
+    const isAdmin = profile.role === "admin";
+    const rows = teamMembers.map(statsForMember).sort((a, b) => b.revenue - a.revenue);
 
     return `
       <section id="recruits" class="section ${activeTab === "recruits" ? "active" : ""}">
@@ -809,12 +859,13 @@
           <div><h2>Recruits</h2><span>${rows.length} on your team</span></div>
         </div>
         <section class="card stack">
-          <div class="section-title"><h3>Invite a Recruit</h3><span>Share your Team ID</span></div>
+          <div class="section-title"><h3>Invite a Recruit</h3><span>Share your Team Code</span></div>
           <div class="team-id-box">
-            <label>Team ID</label>
+            <div class="team-code-big">${escapeHtml(teamShortCode || "—")}</div>
             <div class="copy-row">
-              <input id="recruitTeamIdDisplay" value="${escapeAttr(teamId)}" readonly />
+              <input id="recruitTeamIdDisplay" value="${escapeAttr(teamShortCode)}" readonly />
               <button id="recruitCopyTeamId" class="secondary" type="button">Copy</button>
+              <button id="recruitShareTeamId" class="primary" type="button">Share</button>
             </div>
           </div>
           <p class="muted">Have them tap "Join existing team" on the sign-in screen and paste this ID.</p>
@@ -833,9 +884,44 @@
                 <span>${r.closeRate}% close</span>
                 <span>${money(r.revenue)}</span>
               </div>
-              <small>Joined ${new Date(r.created_at).toLocaleDateString()}</small>
-            </article>`).join("") : empty("No recruits yet. Share your Team ID to get started.")}
+              <small>Joined ${new Date(r.created_at).toLocaleDateString()}${r.recruited_by_name ? " · Recruited by " + escapeHtml(r.recruited_by_name) : ""}</small>
+            </article>`).join("") : empty("No recruits yet. Share your Team Code to get started.")}
         </section>
+        ${isAdmin ? renderOrgTeamManagement() : ""}
+      </section>`;
+  }
+
+  // Org-wide team management: only the owner (admin) sees this. Lets them
+  // spin up new teams and move any recruit into a different one.
+  function renderOrgTeamManagement() {
+    const teamsById = Object.fromEntries(orgTeams.map((t) => [t.id, t]));
+    return `
+      <section class="card stack">
+        <div class="section-title"><h3>Your Teams</h3><span>${orgTeams.length} total</span></div>
+        ${orgTeams.map((t) => {
+          const count = orgProfiles.filter((p) => p.team_id === t.id).length;
+          return `<div class="progress-row">
+            <div class="row-head"><b>${escapeHtml(t.name)}</b><span>${count} member${count === 1 ? "" : "s"}</span></div>
+            <small>Code: ${escapeHtml(t.short_code || "—")}</small>
+          </div>`;
+        }).join("")}
+        <div class="form-grid">
+          <label>New team name <input id="newTeamName" placeholder="Desert Hawks" /></label>
+          <button id="createTeam" class="primary" type="button">Create Team</button>
+        </div>
+      </section>
+      <section class="card stack">
+        <div class="section-title"><h3>Move Recruits Between Teams</h3><span>${orgProfiles.length} people org-wide</span></div>
+        ${orgProfiles.filter((p) => p.role !== "admin").map((p) => `
+          <div class="user-row">
+            <div class="record-top">
+              <strong>${escapeHtml(p.name)}</strong>
+              <select class="role-select" data-set-role="${p.id}">${ROLE_OPTIONS.map((r) => `<option value="${r}" ${p.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select>
+            </div>
+            <select class="role-select" data-set-team="${p.id}">
+              ${orgTeams.map((t) => `<option value="${t.id}" ${p.team_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("")}
+            </select>
+          </div>`).join("")}
       </section>`;
   }
 
@@ -864,7 +950,7 @@
             return `<article class="record">
               <div class="record-top">
                 <strong>${escapeHtml(c.name)}</strong>
-                <span class="countdown ${c.priority === "hot" ? "badge-hot" : "badge-good"}" data-remind-at="${when}">${cd.text}</span>
+                <span class="countdown ${priorityInfo(c.priority).badge}" data-remind-at="${when}">${cd.text}</span>
               </div>
               <small>Come back ${escapeHtml(atStr)}</small>
               ${c.address ? `<small>${escapeHtml(c.address)}</small>` : ""}
@@ -971,13 +1057,33 @@
           <section class="card stack">
             <div class="section-title"><h3>Team</h3><span>${teamMembers.length} members</span></div>
             <div class="team-id-box">
-              <label>Team ID (share with reps to join)</label>
+              <label>Team Code (share with reps to join)</label>
+              <div class="team-code-big">${escapeHtml(teamShortCode || "—")}</div>
               <div class="copy-row">
-                <input id="teamIdDisplay" value="${escapeAttr(teamId)}" readonly />
+                <input id="teamIdDisplay" value="${escapeAttr(teamShortCode)}" readonly />
                 <button id="copyTeamId" class="secondary" type="button">Copy</button>
+                <button id="shareTeamId" class="primary" type="button">Share</button>
               </div>
             </div>
             ${teamMembers.map(memberRecord).join("")}
+          </section>` : ""}
+        ${isAdmin ? `
+          <section class="card stack">
+            <div class="section-title"><h3>Add Past Data</h3><span>Backfill KPIs</span></div>
+            <p class="muted">Already have numbers from a few weeks ago? Enter the totals for that day and they'll be added to your history.</p>
+            <div class="form-grid">
+              <label>Date <input id="bfDate" type="date" value="${todayKey()}" /></label>
+              <div class="split">
+                <label>Doors knocked <input id="bfDoors" type="number" min="0" value="0" /></label>
+                <label>Answered <input id="bfAnswered" type="number" min="0" value="0" /></label>
+                <label>Pitched <input id="bfPitch" type="number" min="0" value="0" /></label>
+                <label>Go backs <input id="bfAppointment" type="number" min="0" value="0" /></label>
+                <label>Not interested <input id="bfNotInterested" type="number" min="0" value="0" /></label>
+                <label>Sales <input id="bfSales" type="number" min="0" value="0" /></label>
+              </div>
+              <label>Total revenue from those sales <input id="bfRevenue" type="number" min="0" value="0" /></label>
+              <button id="addBackfill" class="primary" type="button">Add to History</button>
+            </div>
           </section>` : ""}
         <section class="card stack">
           <h3>Data</h3>
@@ -1359,14 +1465,20 @@
     bind("#exportJson", "click", () => download("corekpis-backup.json", JSON.stringify({ settings, logs, callbacks, sales }, null, 2), "application/json"));
     bind("#signOut", "click", handleSignOut);
     bind("#saveSettings", "click", saveSettings);
+    bind("#addBackfill", "click", addBackfillEntry);
     bind("#copyTeamId", "click", () => {
       const input = document.querySelector("#teamIdDisplay");
       if (input) { navigator.clipboard.writeText(input.value).catch(() => {}); }
     });
+    bind("#shareTeamId", "click", () => shareTeamCode());
 
     document.querySelectorAll("[data-set-role]").forEach((sel) => {
       sel.addEventListener("change", () => setMemberRole(sel.dataset.setRole, sel.value));
     });
+    document.querySelectorAll("[data-set-team]").forEach((sel) => {
+      sel.addEventListener("change", () => setMemberTeam(sel.dataset.setTeam, sel.value));
+    });
+    bind("#createTeam", "click", createNewTeam);
 
     bind("#calPrev", "click", () => { calendarMonth--; render(); });
     bind("#calNext", "click", () => { calendarMonth++; render(); });
@@ -1377,6 +1489,16 @@
       const input = document.querySelector("#recruitTeamIdDisplay");
       if (input) { navigator.clipboard.writeText(input.value).catch(() => {}); }
     });
+    bind("#recruitShareTeamId", "click", () => shareTeamCode());
+  }
+
+  function shareTeamCode() {
+    const text = `Join my team on CORE Kpi's! Open the app and tap "Join existing team", then enter this code: ${teamShortCode}`;
+    if (navigator.share) {
+      navigator.share({ title: "Join my CORE Kpi's team", text }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
   }
 
   // ── Mutations (write to Supabase) ───────────────────────────────
@@ -1416,7 +1538,7 @@
         name: entry.customer_name || "Go back",
         address: entry.address,
         remind_at: remindAt,
-        priority: val("#priority") || "normal",
+        priority: val("#priority") || "low",
         notes: entry.notes,
       });
     }
@@ -1434,6 +1556,46 @@
       if (saleData) sales.unshift(saleData);
     }
 
+    saveCache();
+    render();
+  }
+
+  async function addBackfillEntry() {
+    const date = val("#bfDate") || todayKey();
+    const counts = {
+      doorsKnocked: num("#bfDoors"),
+      answered: num("#bfAnswered"),
+      pitch: num("#bfPitch"),
+      appointment: num("#bfAppointment"),
+      notInterested: num("#bfNotInterested"),
+      sale: num("#bfSales"),
+    };
+    const totalRevenue = num("#bfRevenue");
+    const revenuePerSale = counts.sale > 0 ? totalRevenue / counts.sale : 0;
+
+    const rows = [];
+    for (const outcomeId of Object.keys(counts)) {
+      const outcome = outcomes.find((o) => o.id === outcomeId);
+      for (let i = 0; i < counts[outcomeId]; i++) {
+        rows.push({
+          team_id: teamId,
+          user_id: session.user.id,
+          user_name: profile.name,
+          outcome: outcomeId,
+          label: outcome.label,
+          contract_value: outcomeId === "sale" ? revenuePerSale : 0,
+          customer_name: "",
+          address: "",
+          notes: "Backfilled",
+          date,
+        });
+      }
+    }
+    if (!rows.length) return;
+
+    const { data, error } = await sb.from("logs").insert(rows).select();
+    if (error) { console.error(error); return; }
+    logs.unshift(...(data || []));
     saveCache();
     render();
   }
@@ -1546,8 +1708,28 @@
   async function setMemberRole(memberId, newRole) {
     const member = teamMembers.find((m) => m.id === memberId);
     if (member) member.role = newRole;
+    const orgMember = orgProfiles.find((m) => m.id === memberId);
+    if (orgMember) orgMember.role = newRole;
     try { await sb.from("profiles").update({ role: newRole }).eq("id", memberId); } catch (e) { console.error(e); }
     saveCache();
+    render();
+  }
+
+  // Admin-only: move a recruit into a different team.
+  async function setMemberTeam(memberId, newTeamId) {
+    const orgMember = orgProfiles.find((m) => m.id === memberId);
+    if (orgMember) orgMember.team_id = newTeamId;
+    try { await sb.from("profiles").update({ team_id: newTeamId }).eq("id", memberId); } catch (e) { console.error(e); }
+    render();
+  }
+
+  // Admin-only: spin up a new team with its own shareable code.
+  async function createNewTeam() {
+    const name = val("#newTeamName").trim();
+    if (!name) return;
+    const { data, error } = await sb.from("teams").insert({ name, short_code: generateShortCode() }).select().single();
+    if (error) { console.error(error); return; }
+    orgTeams.push(data);
     render();
   }
 
@@ -1768,7 +1950,7 @@
       <article class="record">
         <div class="record-top">
           <strong>${escapeHtml(item.name)}</strong>
-          <span class="countdown ${cd.overdue ? "badge-danger" : item.priority === "hot" ? "badge-hot" : "badge-good"}" data-remind-at="${item.when || 0}">${typeLabel} · ${cd.text}</span>
+          <span class="countdown ${cd.overdue ? "badge-danger" : priorityInfo(item.priority).badge}" data-remind-at="${item.when || 0}">${typeLabel} · ${cd.text}</span>
         </div>
         ${atStr ? `<small>${escapeHtml(atStr)}</small>` : ""}
         ${item.address ? `<small>${escapeHtml(item.address)}</small>` : ""}
@@ -1846,7 +2028,7 @@
     return `
       <div class="progress-row">
         <div class="row-head"><b>${label}</b><span class="muted">${isMoney ? money(current) : current} / ${isMoney ? money(goal) : goal}</span></div>
-        <div class="bar"><span style="width:${pctVal}%"></span></div>
+        <div class="bar"><span data-pct="${pctVal}" style="width:0%"></span></div>
       </div>`;
   }
 
@@ -1864,7 +2046,7 @@
     return `
       <div class="chart-row">
         <b>${escapeHtml(label)}</b>
-        <div class="chart-fill"><i style="width:${w}%; --fill:${fill}"></i></div>
+        <div class="chart-fill"><i data-pct="${w}" style="width:0%; --fill:${fill}"></i></div>
         <span>${value}</span>
       </div>`;
   }
@@ -1907,7 +2089,7 @@
       <article class="record">
         <div class="record-top">
           <strong>${escapeHtml(item.name)}</strong>
-          <span class="countdown ${cd.overdue ? "badge-danger" : item.priority === "hot" ? "badge-hot" : "badge-good"}" data-remind-at="${when}">${cd.text}</span>
+          <span class="countdown ${cd.overdue ? "badge-danger" : priorityInfo(item.priority).badge}" data-remind-at="${when}">${cd.text}</span>
         </div>
         ${atStr ? `<small>Come back ${escapeHtml(atStr)}</small>` : ""}
         ${item.address ? `<small>${escapeHtml(item.address)}</small>` : ""}
@@ -1931,8 +2113,9 @@
       </article>`;
   }
 
-  const ROLE_OPTIONS = ["rep", "manager", "regional", "admin"];
-  const ROLE_LABELS = { rep: "Rep", manager: "Manager", regional: "Regional", admin: "Admin" };
+  // Admin is the sole owner role and can never be reassigned to anyone else.
+  const ROLE_OPTIONS = ["rep", "manager", "regional"];
+  const ROLE_LABELS = { rep: "Rep", manager: "Manager", regional: "Regional", admin: "Owner" };
 
   function memberRecord(member) {
     const isAdmin = profile.role === "admin";
@@ -1941,11 +2124,11 @@
       <div class="user-row">
         <div class="record-top">
           <strong>${escapeHtml(member.name)}${isSelf ? " (you)" : ""}</strong>
-          ${isAdmin && !isSelf
+          ${isAdmin && !isSelf && member.role !== "admin"
             ? `<select class="role-select" data-set-role="${member.id}">${ROLE_OPTIONS.map((r) => `<option value="${r}" ${member.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select>`
             : `<span class="pill">${escapeHtml(ROLE_LABELS[member.role] || member.role)}</span>`}
         </div>
-        <small>Joined ${new Date(member.created_at).toLocaleDateString()}</small>
+        <small>Joined ${new Date(member.created_at).toLocaleDateString()}${member.recruited_by_name ? " · Recruited by " + escapeHtml(member.recruited_by_name) : ""}</small>
       </div>`;
   }
 
@@ -1989,28 +2172,51 @@
 
   // ── Callback Alarms ──────────────────────────────────────────────
   const firedAlarms = new Set();
+  // A window this wide (not just 60s) tolerates mobile browsers throttling
+  // background timers, so a late check still catches a recently-due callback.
+  const ALARM_CATCH_WINDOW_MS = 5 * 60 * 1000;
+
   function checkCallbackAlarms() {
     const now = Date.now();
     callbacks.forEach((c) => {
       if (c.status === "done" || !c.remind_at) return;
       const when = new Date(c.remind_at).getTime();
-      if (when <= now && when > now - 60000 && !firedAlarms.has(c.id)) {
+      if (when <= now && when > now - ALARM_CATCH_WINDOW_MS && !firedAlarms.has(c.id)) {
         firedAlarms.add(c.id);
         fireCallbackAlarm(c);
       }
     });
   }
 
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkCallbackAlarms();
+  });
+
   function fireCallbackAlarm(c) {
     playAlarmBeep();
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       try { new Notification("Callback time!", { body: `${c.name || "Callback"} - ${c.address || ""}`.trim() }); } catch { /* ignore */ }
     }
+    showAlarmBanner(c);
   }
 
+  // Always show something on-screen, since audio/notifications can be
+  // silently blocked by the browser and would otherwise leave no trace.
+  function showAlarmBanner(c) {
+    const banner = document.createElement("div");
+    banner.className = "alarm-banner";
+    banner.innerHTML = `<strong>⏰ Callback time!</strong><span>${escapeHtml(c.name || "Callback")}${c.address ? " - " + escapeHtml(c.address) : ""}</span><button type="button">Dismiss</button>`;
+    banner.querySelector("button").addEventListener("click", () => banner.remove());
+    document.body.appendChild(banner);
+    setTimeout(() => banner.remove(), 20000);
+  }
+
+  let sharedAudioCtx = null;
   function playAlarmBeep() {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = sharedAudioCtx;
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
       [0, 0.3, 0.6].forEach((delay) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -2032,6 +2238,16 @@
       Notification.requestPermission().catch(() => {});
     }
   }
+
+  // Unlock audio on first tap anywhere (autoplay policies block audio
+  // until a user gesture happens on the page).
+  function unlockAudioOnce() {
+    if (!sharedAudioCtx) {
+      try { sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { /* ignore */ }
+    }
+    document.removeEventListener("click", unlockAudioOnce);
+  }
+  document.addEventListener("click", unlockAudioOnce);
 
   function timezoneOptions() {
     return [
@@ -2060,6 +2276,24 @@
   function empty(msg) { return `<div class="empty">${escapeHtml(msg)}</div>`; }
   function dateLabel(d) { return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }); }
   function capitalize(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+
+  // ── Callback Priority Levels ─────────────────────────────────────
+  const priorityLevels = [
+    { id: "dmnh", label: "DMNH", badge: "badge-dmnh" },
+    { id: "low", label: "Low", badge: "badge-low" },
+    { id: "medium", label: "Medium", badge: "badge-medium" },
+    { id: "hot", label: "Hot", badge: "badge-hot" },
+  ];
+  function priorityInfo(p) {
+    return priorityLevels.find((x) => x.id === p) || priorityLevels[1];
+  }
+  function priorityOptionsHtml(selected) {
+    return priorityLevels.map((p) => `<option value="${p.id}" ${selected === p.id ? "selected" : ""}>${p.label}</option>`).join("");
+  }
+  function priorityBadge(p) {
+    const info = priorityInfo(p);
+    return `<span class="${info.badge}">${info.label}</span>`;
+  }
 
   function escapeHtml(t) {
     return String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -2109,6 +2343,7 @@
       btn.addEventListener("click", () => { commTab = btn.dataset.commTab; render(); });
     });
     bindCommEvents();
+    scrollActiveNavIntoView();
   }
 
   function commStats() {
@@ -2446,7 +2681,7 @@
     return `
       <div class="progress-row">
         <div class="row-head"><b>${label}</b><span class="muted">${money(current)} / ${money(max)}</span></div>
-        <div class="bar"><span style="width:${p}%"></span></div>
+        <div class="bar"><span data-pct="${p}" style="width:0%"></span></div>
       </div>`;
   }
 

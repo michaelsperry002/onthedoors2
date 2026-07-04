@@ -5,6 +5,7 @@
 create table teams (
   id uuid default gen_random_uuid() primary key,
   name text not null default 'Field Team',
+  short_code text unique,
   created_at timestamptz default now()
 );
 
@@ -15,6 +16,7 @@ create table profiles (
   region_id uuid,
   name text not null,
   role text not null default 'rep' check (role in ('admin','manager','rep','regional')),
+  recruited_by_name text default '',
   disabled boolean default false,
   created_at timestamptz default now()
 );
@@ -189,3 +191,29 @@ create policy "Team insert accounts" on accounts for insert with check (
 create policy "Team update accounts" on accounts for update using (
   team_id = my_team_id()
 );
+
+-- ── Migration: run this alone if your database already has the tables
+-- above and you just need to add short, shareable team codes. ──
+-- alter table teams add column if not exists short_code text unique;
+-- alter table profiles add column if not exists recruited_by_name text default '';
+
+-- ── Org-wide admin access ──
+-- The sole "admin" (owner) account can see and manage every team, not
+-- just the one they signed up with, so they can create new teams and
+-- move recruits between them.
+create or replace function is_admin()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select coalesce((select role = 'admin' from profiles where id = auth.uid()), false)
+$$;
+
+create policy "Admin reads all teams" on teams for select using (is_admin());
+create policy "Admin updates all teams" on teams for update using (is_admin());
+create policy "Admin reads all profiles" on profiles for select using (is_admin());
+create policy "Admin updates all profiles" on profiles for update using (is_admin());
+create policy "Admin reads all team_settings" on team_settings for select using (is_admin());
+create policy "Admin reads all logs" on logs for select using (is_admin());
+create policy "Admin reads all accounts" on accounts for select using (is_admin());

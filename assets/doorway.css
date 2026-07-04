@@ -509,6 +509,7 @@ label {
   width: 0;
   border-radius: inherit;
   background: var(--primary);
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .chart-grid {
@@ -550,6 +551,7 @@ label {
   height: 100%;
   border-radius: inherit;
   background: var(--fill, linear-gradient(90deg, #f5f5f5, #8a8a8a));
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mini-bars {
@@ -764,15 +766,28 @@ label {
 }
 
 .badge-good {
-  color: #86efac;
+  color: #16a34a;
 }
 
-.badge-hot {
-  color: #fdba74;
+.badge-hot, .badge-danger {
+  color: #dc2626;
 }
 
-.badge-danger {
-  color: #fca5a5;
+.badge-dmnh {
+  color: #6b7280;
+}
+
+.badge-low {
+  color: #2563eb;
+}
+
+.badge-medium {
+  color: #ca8a04;
+}
+
+.badge-good, .badge-hot, .badge-danger, .badge-dmnh, .badge-low, .badge-medium {
+  font-weight: 800;
+  font-size: 12px;
 }
 
 @media (min-width: 760px) {
@@ -818,10 +833,12 @@ label {
 .copy-row {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .copy-row input {
   flex: 1;
+  min-width: 60px;
   font-size: 11px;
   font-family: monospace;
   color: var(--muted);
@@ -834,6 +851,17 @@ label {
 .team-id-box {
   display: grid;
   gap: 7px;
+}
+
+.team-code-big {
+  text-align: center;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1.5px dashed var(--line);
 }
 
 .leaderboard {
@@ -1110,4 +1138,42 @@ body.comm-mode .mode-toggle {
 .quick-hit .icon {
   font-size: 20px;
   background: rgba(255, 255, 255, 0.35);
+}
+
+/* ════ Alarm Banner ════ */
+.alarm-banner {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  width: min(360px, calc(100% - 24px));
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #14151a;
+  color: #fff;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  animation: alarmSlideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.alarm-banner strong { font-size: 15px; }
+.alarm-banner span { font-size: 13px; opacity: 0.85; }
+
+.alarm-banner button {
+  justify-self: start;
+  margin-top: 6px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@keyframes alarmSlideIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-16px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
