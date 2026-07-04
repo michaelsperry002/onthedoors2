@@ -97,74 +97,95 @@ alter table callbacks enable row level security;
 alter table sales enable row level security;
 alter table accounts enable row level security;
 
+-- Helper functions to look up the caller's team_id / role without
+-- triggering RLS recursion (querying profiles directly inside a
+-- profiles policy causes "infinite recursion detected in policy" errors).
+create or replace function my_team_id()
+returns uuid
+language sql
+security definer
+stable
+as $$
+  select team_id from profiles where id = auth.uid()
+$$;
+
+create or replace function my_role()
+returns text
+language sql
+security definer
+stable
+as $$
+  select role from profiles where id = auth.uid()
+$$;
+
 -- RLS Policies
 
 -- Teams: members can read their own team
 create policy "Members read team" on teams for select using (
-  id in (select team_id from profiles where id = auth.uid())
+  id = my_team_id()
 );
 create policy "Anyone can insert team" on teams for insert with check (true);
 
 -- Profiles
 create policy "Users see own profile" on profiles for select using (id = auth.uid());
 create policy "Users see team members" on profiles for select using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Anyone can insert own profile" on profiles for insert with check (id = auth.uid());
 create policy "Users update own profile" on profiles for update using (id = auth.uid());
 
 -- Team settings
 create policy "Team members read settings" on team_settings for select using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Admins update settings" on team_settings for update using (
-  team_id in (select team_id from profiles where id = auth.uid())
-  and (select role from profiles where id = auth.uid()) = 'admin'
+  team_id = my_team_id()
+  and my_role() = 'admin'
 );
 create policy "Admins insert settings" on team_settings for insert with check (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 
 -- Logs
 create policy "Team read logs" on logs for select using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Team insert logs" on logs for insert with check (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Team delete logs" on logs for delete using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 
 -- Callbacks
 create policy "Team read callbacks" on callbacks for select using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Team insert callbacks" on callbacks for insert with check (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Team update callbacks" on callbacks for update using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 
 -- Sales
 create policy "Team read sales" on sales for select using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Team insert sales" on sales for insert with check (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Team delete sales" on sales for delete using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 
 -- Accounts
 create policy "Team read accounts" on accounts for select using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Team insert accounts" on accounts for insert with check (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
 create policy "Team update accounts" on accounts for update using (
-  team_id in (select team_id from profiles where id = auth.uid())
+  team_id = my_team_id()
 );
