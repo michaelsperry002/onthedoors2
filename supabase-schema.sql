@@ -12,8 +12,9 @@ create table teams (
 create table profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   team_id uuid references teams(id),
+  region_id uuid,
   name text not null,
-  role text not null default 'rep' check (role in ('admin','manager','rep')),
+  role text not null default 'rep' check (role in ('admin','manager','rep','regional')),
   disabled boolean default false,
   created_at timestamptz default now()
 );
@@ -73,6 +74,20 @@ create table sales (
   created_at timestamptz default now()
 );
 
+-- Accounts (field-side account tracking: installs, status, contract value)
+create table accounts (
+  id uuid default gen_random_uuid() primary key,
+  team_id uuid references teams(id) not null,
+  user_id uuid references auth.users(id) not null,
+  customer_name text not null,
+  address text default '',
+  status text not null default 'pending' check (status in ('pending','active','serviced','cancelled')),
+  contract_value numeric default 0,
+  install_date text default '',
+  notes text default '',
+  created_at timestamptz default now()
+);
+
 -- Enable Row Level Security on all tables
 alter table teams enable row level security;
 alter table profiles enable row level security;
@@ -80,6 +95,7 @@ alter table team_settings enable row level security;
 alter table logs enable row level security;
 alter table callbacks enable row level security;
 alter table sales enable row level security;
+alter table accounts enable row level security;
 
 -- RLS Policies
 
@@ -139,5 +155,16 @@ create policy "Team insert sales" on sales for insert with check (
   team_id in (select team_id from profiles where id = auth.uid())
 );
 create policy "Team delete sales" on sales for delete using (
+  team_id in (select team_id from profiles where id = auth.uid())
+);
+
+-- Accounts
+create policy "Team read accounts" on accounts for select using (
+  team_id in (select team_id from profiles where id = auth.uid())
+);
+create policy "Team insert accounts" on accounts for insert with check (
+  team_id in (select team_id from profiles where id = auth.uid())
+);
+create policy "Team update accounts" on accounts for update using (
   team_id in (select team_id from profiles where id = auth.uid())
 );
