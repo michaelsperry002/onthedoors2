@@ -830,6 +830,31 @@ label {
   min-height: 36px;
 }
 
+.pw-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pw-wrap input {
+  padding-right: 42px;
+}
+
+.pw-eye {
+  position: absolute;
+  right: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 16px;
+  opacity: 0.55;
+}
+
+.pw-eye.on {
+  opacity: 1;
+}
+
 .copy-row {
   display: flex;
   gap: 8px;
@@ -1176,4 +1201,76 @@ body.comm-mode .mode-toggle {
 @keyframes alarmSlideIn {
   from { opacity: 0; transform: translateX(-50%) translateY(-16px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ════ Onboarding ════ */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(20, 21, 26, 0.55);
+  backdrop-filter: blur(4px);
+  animation: fadeUp 0.25s ease-out;
+}
+
+.onboarding-card {
+  width: min(360px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 28px 24px;
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.onboarding-card h2 {
+  font-size: 20px;
+}
+
+.onboarding-card p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.onboarding-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.onboarding-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.onboarding-dots span.on {
+  background: var(--ink);
+}
+
+/* ════ Calendar hourly groups ════ */
+.cal-hour-group {
+  display: grid;
+  gap: 8px;
+}
+
+.cal-hour-label {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.record.conflict {
+  border-left: 3px solid #dc2626;
+  padding-left: 9px;
+  margin-left: -1px;
 }

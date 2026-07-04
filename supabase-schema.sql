@@ -17,6 +17,11 @@ create table profiles (
   name text not null,
   role text not null default 'rep' check (role in ('admin','manager','rep','regional')),
   recruited_by_name text default '',
+  email text default '',
+  birthday date,
+  phone text default '',
+  address text default '',
+  needs_onboarding boolean default true,
   disabled boolean default false,
   created_at timestamptz default now()
 );
@@ -58,7 +63,9 @@ create table callbacks (
   name text not null,
   address text default '',
   date text not null,
-  priority text default 'normal',
+  remind_at timestamptz,
+  window_end timestamptz,
+  priority text default 'low',
   notes text default '',
   status text default 'open',
   created_at timestamptz default now()
@@ -217,3 +224,16 @@ create policy "Admin updates all profiles" on profiles for update using (is_admi
 create policy "Admin reads all team_settings" on team_settings for select using (is_admin());
 create policy "Admin reads all logs" on logs for select using (is_admin());
 create policy "Admin reads all accounts" on accounts for select using (is_admin());
+
+-- ── Migration: expanded recruit profile info + onboarding flag ──
+-- alter table profiles add column if not exists email text default '';
+-- alter table profiles add column if not exists birthday date;
+-- alter table profiles add column if not exists phone text default '';
+-- alter table profiles add column if not exists address text default '';
+-- alter table profiles add column if not exists needs_onboarding boolean default true;
+
+-- ── Migration: CRITICAL - callbacks table was missing the remind_at
+-- column this whole time, so every callback silently failed to save.
+-- Run this now if callbacks aren't working. ──
+-- alter table callbacks add column if not exists remind_at timestamptz;
+-- alter table callbacks add column if not exists window_end timestamptz;

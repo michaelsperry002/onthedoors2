@@ -88,7 +88,7 @@
               outcome, label: LABELS[outcome],
               contract_value: isSale ? 1800 + ((k * 137) % 2600) : 0,
               customer_name: isSale ? ["Smith","Jones","Brown","Davis","Wilson","Taylor","Clark","Moore","Lee","Hall","Young","King","Wright","Green","Adams","Baker","Hill","Scott","Nelson","Ward"][(k+ri+day)%20] + " Family" : "", address: (100 + k) + " Oak St",
-              notes: "", date, created_at: date + "T1" + pad(k % 9) + ":00:00Z",
+              notes: "", date, created_at: date + "T" + pad(10 + (k % 9)) + ":00:00Z",
             });
           }
         });

@@ -84,6 +84,10 @@
   let loading = true;
   let authMode = "login";
   let authError = "";
+  let onboardingStep = 0;
+  // Preserves what the user typed on the auth screen across re-renders
+  // (e.g. after a validation error) - only password fields get wiped.
+  let authDraft = { teamId: "", recruiter: "", name: "", birthday: "", phone: "", address: "", email: "" };
 
   // ── Commission Side State ───────────────────────────────────────
   let appMode = "field"; // "field" or "commission"
@@ -104,7 +108,6 @@
       render();
     });
     clockTimer = setInterval(updateClock, 1000);
-    requestNotificationPermission();
 
     loadCache();
     render();
@@ -218,6 +221,13 @@
 
         teamName = teamRes.data?.name || "Field Team";
         teamShortCode = teamRes.data?.short_code || "";
+        // Older teams created before Team Codes existed won't have one yet -
+        // generate and save one automatically instead of leaving it blank.
+        if (!teamShortCode && profile.role === "admin") {
+          const newCode = generateShortCode();
+          const { error: codeErr } = await sb.from("teams").update({ short_code: newCode }).eq("id", teamId);
+          if (!codeErr) teamShortCode = newCode;
+        }
         applySettings(settingsRes.data);
         logs = logsRes.data || [];
         callbacks = cbRes.data || [];
@@ -232,6 +242,13 @@
           ]);
           orgTeams = orgTeamsRes.data || [];
           orgProfiles = orgProfilesRes.data || [];
+
+          const codelessTeams = orgTeams.filter((t) => !t.short_code);
+          for (const t of codelessTeams) {
+            const newCode = generateShortCode();
+            const { error: codeErr } = await sb.from("teams").update({ short_code: newCode }).eq("id", t.id);
+            if (!codeErr) t.short_code = newCode;
+          }
         }
       }
       saveCache();
@@ -249,28 +266,6 @@
     return code;
   }
 
-  async function handleSignUp(name, email, password, newTeamName) {
-    authError = "";
-    const { data, error } = await sb.auth.signUp({ email, password });
-    if (error) { authError = error.message; render(); return; }
-    if (!data.user) { authError = "Check your email to confirm your account."; render(); return; }
-
-    const { data: team, error: teamErr } = await sb.from("teams").insert({ name: newTeamName || "Field Team", short_code: generateShortCode() }).select().single();
-    if (teamErr) { authError = teamErr.message; render(); return; }
-
-    const { error: profErr } = await sb.from("profiles").insert({
-      id: data.user.id, team_id: team.id, name, role: "admin",
-    });
-    if (profErr) { authError = profErr.message; render(); return; }
-
-    await sb.from("team_settings").insert({ team_id: team.id });
-    session = data.session;
-    await loadFromSupabase();
-    activeTab = "dashboard";
-    location.hash = "dashboard";
-    render();
-  }
-
   async function handleSignIn(email, password) {
     authError = "";
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
@@ -282,7 +277,7 @@
     render();
   }
 
-  async function handleJoinTeam(name, email, password, joinCode, recruiterName) {
+  async function handleJoinTeam({ name, email, password, joinCode, recruiterName, birthday, phone, address }) {
     authError = "";
     const code = joinCode.trim().toUpperCase();
     const { data: team, error: teamErr } = await sb.from("teams").select("id").eq("short_code", code).single();
@@ -293,7 +288,10 @@
     if (!data.user) { authError = "Check your email to confirm your account."; render(); return; }
 
     const { error: profErr } = await sb.from("profiles").insert({
-      id: data.user.id, team_id: team.id, name, role: "rep", recruited_by_name: recruiterName || "",
+      id: data.user.id, team_id: team.id, name, role: "rep",
+      recruited_by_name: recruiterName || "", email,
+      birthday: birthday || null, phone: phone || "", address: address || "",
+      needs_onboarding: true,
     });
     if (profErr) { authError = "Error joining team."; render(); return; }
 
@@ -348,9 +346,18 @@
     render();
   }
 
+  // A password input with a click-to-reveal eye button.
+  function passwordFieldHtml(id, label, autocomplete) {
+    return `<label>${label}
+      <div class="pw-wrap">
+        <input id="${id}" type="password" autocomplete="${autocomplete}" placeholder="••••••••" />
+        <button type="button" class="pw-eye" data-toggle-pw="${id}" aria-label="Show password">👁</button>
+      </div>
+    </label>`;
+  }
+
   function renderAuth() {
     const isLogin = authMode === "login";
-    const isSignup = authMode === "signup";
     const isJoin = authMode === "join";
 
     appRoot().innerHTML = `
@@ -358,24 +365,27 @@
         <section class="auth-card">
           <div class="brand">
             <small>CORE Kpi's</small>
-            <h1>${isLogin ? "Sign In" : isSignup ? "Create Account" : "Join a Team"}</h1>
-            <p class="muted">${isLogin ? "Sign in to your account." : isSignup ? "Start a new team." : "Join an existing team with a Team Code."}</p>
+            <h1>${isLogin ? "Sign In" : "Join a Team"}</h1>
+            <p class="muted">${isLogin ? "Sign in to your account." : "Enter the Team Code your recruiter gave you."}</p>
           </div>
           <div class="card stack">
-            ${!isLogin ? `<label>Your name <input id="authName" autocomplete="name" placeholder="Michael Sperry" /></label>` : ""}
-            <label>Email <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" /></label>
-            <label>Password <input id="authPassword" type="password" autocomplete="${isLogin ? "current-password" : "new-password"}" placeholder="••••••••" /></label>
-            ${isSignup ? `<label>Team name <input id="authTeamName" placeholder="My Sales Team" /></label>` : ""}
-            ${isJoin ? `<label>Team Code <input id="authTeamId" placeholder="e.g. BLU492" style="text-transform:uppercase" /></label>` : ""}
-            ${isJoin ? `<label>Who recruited you? <input id="authRecruiter" placeholder="Their name" /></label>` : ""}
+            ${isJoin ? `<label>Team Code <input id="authTeamId" placeholder="e.g. BLU492" style="text-transform:uppercase" value="${escapeAttr(authDraft.teamId)}" /></label>` : ""}
+            ${isJoin ? `<label>Who recruited you? <input id="authRecruiter" placeholder="Their name" value="${escapeAttr(authDraft.recruiter)}" /></label>` : ""}
+            ${isJoin ? `<label>Your name <input id="authName" autocomplete="name" placeholder="Michael Sperry" value="${escapeAttr(authDraft.name)}" /></label>` : ""}
+            ${isJoin ? `<label>Birthday <input id="authBirthday" type="date" value="${escapeAttr(authDraft.birthday)}" /></label>` : ""}
+            ${isJoin ? `<label>Cell number <input id="authPhone" type="tel" autocomplete="tel" placeholder="(555) 123-4567" value="${escapeAttr(authDraft.phone)}" /></label>` : ""}
+            ${isJoin ? `<label>Address <input id="authAddress" autocomplete="street-address" placeholder="123 Oak Street" value="${escapeAttr(authDraft.address)}" /></label>` : ""}
+            <label>Email <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" value="${escapeAttr(authDraft.email)}" /></label>
+            ${passwordFieldHtml("authPassword", "Password", isLogin ? "current-password" : "new-password")}
+            ${isJoin ? passwordFieldHtml("authPasswordConfirm", "Confirm Password", "new-password") : ""}
             <p id="authError" class="error">${escapeHtml(authError)}</p>
             <button id="authSubmit" class="primary" type="button">
-              ${isLogin ? "Sign In" : isSignup ? "Create Account" : "Join Team"}
+              ${isLogin ? "Sign In" : "Join Team"}
             </button>
             <div class="auth-links">
               ${isLogin ? `
-                <button class="ghost" type="button" data-auth-mode="signup">Create new account</button>
                 <button class="ghost" type="button" data-auth-mode="join">Join existing team</button>
+                <button class="ghost" type="button" id="forgotPassword">Forgot password?</button>
               ` : `
                 <button class="ghost" type="button" data-auth-mode="login">Back to sign in</button>
               `}
@@ -384,17 +394,76 @@
         </section>
       </main>`;
 
+    document.querySelectorAll("[data-toggle-pw]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const input = document.querySelector("#" + btn.dataset.togglePw);
+        if (!input) return;
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        btn.classList.toggle("on", show);
+      });
+    });
+
     bind("#authSubmit", "click", async () => {
       const email = val("#authEmail").trim();
       const password = val("#authPassword");
-      if (!email || !password) { authError = "Enter email and password."; render(); return; }
-      if (isLogin) await handleSignIn(email, password);
-      else if (isSignup) await handleSignUp(val("#authName").trim() || "User", email, password, val("#authTeamName").trim());
-      else await handleJoinTeam(val("#authName").trim() || "User", email, password, val("#authTeamId").trim(), val("#authRecruiter").trim());
+
+      if (isLogin) {
+        authDraft.email = email;
+        if (!email || !password) { authError = "Enter email and password."; render(); return; }
+        await handleSignIn(email, password);
+        return;
+      }
+
+      // Snapshot every non-password field so a validation error below
+      // doesn't wipe what the user already typed.
+      authDraft = {
+        teamId: val("#authTeamId").trim(),
+        recruiter: val("#authRecruiter").trim(),
+        name: val("#authName").trim(),
+        birthday: val("#authBirthday"),
+        phone: val("#authPhone").trim(),
+        address: val("#authAddress").trim(),
+        email,
+      };
+
+      // Join Team: validate password strength + confirmation before hitting the network.
+      const confirmPassword = val("#authPasswordConfirm");
+      if (password.length < 6) {
+        authError = "Password must be at least 6 characters.";
+        render();
+        return;
+      }
+      if (password !== confirmPassword) {
+        authError = "Passwords don't match.";
+        render();
+        return;
+      }
+      if (!email) { authError = "Enter your email."; render(); return; }
+      if (!authDraft.teamId) { authError = "Enter your Team Code."; render(); return; }
+
+      await handleJoinTeam({
+        name: authDraft.name || "User",
+        email,
+        password,
+        joinCode: authDraft.teamId,
+        recruiterName: authDraft.recruiter,
+        birthday: authDraft.birthday,
+        phone: authDraft.phone,
+        address: authDraft.address,
+      });
     });
 
     document.querySelectorAll("[data-auth-mode]").forEach((btn) => {
       btn.addEventListener("click", () => { authMode = btn.dataset.authMode; authError = ""; render(); });
+    });
+
+    bind("#forgotPassword", "click", async () => {
+      const email = val("#authEmail").trim();
+      if (!email) { authError = "Enter your email above first, then tap Forgot password."; render(); return; }
+      await sb.auth.resetPasswordForEmail(email);
+      authError = "If that email has an account, a reset link is on its way.";
+      render();
     });
   }
 
@@ -438,7 +507,8 @@
           <button class="nav-btn ${activeTab === item.id ? "active" : ""}" data-tab="${item.id}" type="button">
             <span>${item.label}</span>
           </button>`).join("")}
-      </nav>`;
+      </nav>
+      ${profile.needs_onboarding ? renderOnboarding() : ""}`;
 
     bind("#modeToggle", "click", toggleAppMode);
     document.querySelectorAll("[data-tab]").forEach((btn) => {
@@ -446,6 +516,7 @@
     });
     bindCommonEvents();
     scrollActiveNavIntoView();
+    bindOnboardingEvents();
   }
 
   // Re-rendering rebuilds the nav bar from scratch, which would otherwise
@@ -453,6 +524,46 @@
   function scrollActiveNavIntoView() {
     const activeBtn = document.querySelector(".nav-btn.active");
     if (activeBtn) activeBtn.scrollIntoView({ behavior: "auto", inline: "nearest", block: "nearest" });
+  }
+
+  // ── First-login Onboarding ────────────────────────────────────────
+  const ONBOARDING_STEPS = [
+    { title: "Welcome to CORE Kpi's!", body: "This is where you'll track every door you knock, every day." },
+    { title: "Log as you walk", body: "Tap Log and hit a button every time something happens - a door, an answer, a pitch, a sale." },
+    { title: "Never miss a callback", body: "Set a callback timer and it'll alert you when it's time to go back. Check Calendar to see them by day." },
+    { title: "Watch your goals", body: "Dashboard shows your progress against today's goals, live, as you knock." },
+  ];
+
+  function renderOnboarding() {
+    const step = ONBOARDING_STEPS[onboardingStep];
+    const isLast = onboardingStep === ONBOARDING_STEPS.length - 1;
+    return `
+      <div class="onboarding-overlay">
+        <div class="onboarding-card">
+          <div class="onboarding-dots">
+            ${ONBOARDING_STEPS.map((_, i) => `<span class="${i === onboardingStep ? "on" : ""}"></span>`).join("")}
+          </div>
+          <h2>${escapeHtml(step.title)}</h2>
+          <p>${escapeHtml(step.body)}</p>
+          <button id="onboardingNext" class="primary" type="button">${isLast ? "Let's go!" : "Next"}</button>
+          ${!isLast ? `<button id="onboardingSkip" class="ghost" type="button">Skip</button>` : ""}
+        </div>
+      </div>`;
+  }
+
+  function bindOnboardingEvents() {
+    bind("#onboardingNext", "click", () => {
+      if (onboardingStep < ONBOARDING_STEPS.length - 1) { onboardingStep++; render(); }
+      else finishOnboarding();
+    });
+    bind("#onboardingSkip", "click", finishOnboarding);
+  }
+
+  async function finishOnboarding() {
+    profile.needs_onboarding = false;
+    onboardingStep = 0;
+    try { await sb.from("profiles").update({ needs_onboarding: false }).eq("id", profile.id); } catch { /* ignore */ }
+    render();
   }
 
   // ── Dashboard ───────────────────────────────────────────────────
@@ -535,6 +646,7 @@
             ${metricCompare("Close Rate", closeRate, settings.target_close_rate)}
           </section>
         </div>
+        ${renderPaceCard()}
         ${pg ? `
         <section class="card stack personal-goals-card">
           <div class="section-title"><h3>Personal Goals</h3><span>Auto-adjusted from your data</span></div>
@@ -628,10 +740,87 @@
           <div class="section-title"><h3>Hot Callbacks</h3><span>${callbacksDue.length} due</span></div>
           ${callbacksDue.length ? callbacksDue.slice(0, 4).map(callbackRecord).join("") : empty("No due callbacks right now.")}
         </section>
+        ${renderBestTimesCard()}
       </section>`;
   }
 
-  // ── Quick Log ───────────────────────────────────────────────────
+  // Uses this rep's own last-30-day conversion history to tell them how
+  // many more doors they need today to hit their sales goal / next sale.
+  function computePaceProjection() {
+    const last30 = logs.filter((l) => daysBetween(parseLocalDate(l.date), new Date()) <= 30);
+    const doorsAll = last30.length;
+    const salesAll = last30.filter((l) => l.outcome === "sale").length;
+    if (!doorsAll || !salesAll) return null;
+    const doorsPerSale = doorsAll / salesAll;
+
+    const today = totalsFor("today");
+    const remainingSales = Math.max(0, settings.daily_sales_goal - today.sale);
+    const doorsNeededForGoal = Math.ceil(remainingSales * doorsPerSale);
+    const doorsSinceLastSale = today.doors - today.sale * doorsPerSale;
+    const doorsUntilNextSale = Math.max(0, Math.ceil(doorsPerSale - doorsSinceLastSale));
+
+    return { doorsPerSale, remainingSales, doorsNeededForGoal, doorsUntilNextSale, doorsSoFar: today.doors };
+  }
+
+  // Finds which hour of the day this rep knocks the most doors, gets the
+  // most answers, and closes the most sales - so they know when to go out.
+  function computeBestTimes() {
+    if (!logs.length) return null;
+    const doorHours = new Array(24).fill(0);
+    const answerHours = new Array(24).fill(0);
+    const saleHours = new Array(24).fill(0);
+    logs.forEach((l) => {
+      if (!l.created_at) return;
+      const hour = new Date(l.created_at).getHours();
+      doorHours[hour]++;
+      if (["answered", "pitch", "appointment", "sale"].includes(l.outcome)) answerHours[hour]++;
+      if (l.outcome === "sale") saleHours[hour]++;
+    });
+    const peak = (arr) => {
+      const max = Math.max(...arr);
+      return max > 0 ? arr.indexOf(max) : null;
+    };
+    return { doorPeak: peak(doorHours), answerPeak: peak(answerHours), salePeak: peak(saleHours) };
+  }
+
+  function formatHour(h) {
+    if (h === null || h === undefined) return "—";
+    const period = h < 12 ? "AM" : "PM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12} ${period}`;
+  }
+
+  function renderBestTimesCard() {
+    const bt = computeBestTimes();
+    if (!bt) return "";
+    return `
+      <section class="card stack">
+        <div class="section-title"><h3>Best Times</h3><span>All-time, by hour</span></div>
+        <div class="grid-3">
+          ${stat("Most Doors", formatHour(bt.doorPeak), "knock hour")}
+          ${stat("Most Answers", formatHour(bt.answerPeak), "answer hour")}
+          ${stat("Most Sales", formatHour(bt.salePeak), "close hour")}
+        </div>
+      </section>`;
+  }
+
+  function renderPaceCard() {
+    const pace = computePaceProjection();
+    if (!pace) {
+      return `<section class="card stack">
+        <div class="section-title"><h3>Pace to Goal</h3><span>Needs history</span></div>
+        <p class="muted">Log a few days of doors and sales and this will tell you exactly how many more doors you need today to hit your goal.</p>
+      </section>`;
+    }
+    return `
+      <section class="card stack">
+        <div class="section-title"><h3>Pace to Goal</h3><span>~${pace.doorsPerSale.toFixed(1)} doors/sale (30-day avg)</span></div>
+        ${pace.remainingSales > 0
+          ? `<p>You need about <strong>${pace.doorsNeededForGoal} more doors</strong> today to hit your sales goal.</p>`
+          : `<p>You've already hit today's sales goal. 🎉</p>`}
+        <p class="muted">About <strong>${pace.doorsUntilNextSale} more doors</strong> until your next projected sale, based on how you've been closing lately.</p>
+      </section>`;
+  }
   function renderLog() {
     return `
       <section id="log" class="section ${activeTab === "log" ? "active" : ""}">
@@ -744,6 +933,9 @@
               <label>Hours <input id="cbHours" type="number" min="0" value="1" /></label>
               <label>Minutes <input id="cbMins" type="number" min="0" max="59" value="0" /></label>
             </div>
+            <label>Not an exact time? Give a window (minutes)
+              <input id="cbWindowMins" type="number" min="0" value="0" placeholder="e.g. 30 for 6:30-7:00" />
+            </label>
             <label>Priority
               <select id="cbPriority">${priorityOptionsHtml("low")}</select>
             </label>
@@ -769,6 +961,78 @@
   // ── Calendar ────────────────────────────────────────────────────
   let calendarMonth = new Date().getFullYear() * 12 + new Date().getMonth();
   let calendarSelectedDay = todayKey();
+
+  const PRIORITY_RANK = { hot: 3, medium: 2, low: 1, dmnh: 0 };
+
+  function itemStartMs(c) { return c.remind_at ? new Date(c.remind_at).getTime() : null; }
+  function itemEndMs(c) {
+    if (c.window_end) return new Date(c.window_end).getTime();
+    const start = itemStartMs(c);
+    return start ? start + 30 * 60000 : null; // assume a 30-min slot when no window is given
+  }
+
+  // Hot priority goes first; a callback with a flexible time window is
+  // treated as easier to move, so it sorts after fixed-time ones at the
+  // same priority level.
+  function sortCalendarItems(items) {
+    return items.slice().sort((a, b) => {
+      const rankDiff = (PRIORITY_RANK[b.priority] ?? 1) - (PRIORITY_RANK[a.priority] ?? 1);
+      if (rankDiff !== 0) return rankDiff;
+      const flexDiff = (a.window_end ? 1 : 0) - (b.window_end ? 1 : 0);
+      if (flexDiff !== 0) return flexDiff;
+      return (itemStartMs(a) || 0) - (itemStartMs(b) || 0);
+    });
+  }
+
+  // Marks any callback whose time window overlaps another one that day.
+  function flagConflicts(items) {
+    for (let i = 0; i < items.length; i++) {
+      items[i]._conflict = false;
+      for (let j = 0; j < items.length; j++) {
+        if (i === j) continue;
+        const aStart = itemStartMs(items[i]), aEnd = itemEndMs(items[i]);
+        const bStart = itemStartMs(items[j]), bEnd = itemEndMs(items[j]);
+        if (aStart == null || bStart == null) continue;
+        if (aStart < bEnd && bStart < aEnd) { items[i]._conflict = true; break; }
+      }
+    }
+  }
+
+  function timeRangeLabel(c) {
+    if (!c.remind_at) return "";
+    const start = new Date(c.remind_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    if (!c.window_end) return start;
+    const end = new Date(c.window_end).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return `${start} - ${end}`;
+  }
+
+  // Breaks the selected day's items into hour buckets so it reads like a
+  // timeline instead of a flat list.
+  function renderHourlyGroups(items) {
+    const groups = [];
+    let lastHour = null;
+    items.forEach((c) => {
+      const hour = c.remind_at ? new Date(c.remind_at).getHours() : null;
+      if (hour !== lastHour) { groups.push({ hour, items: [] }); lastHour = hour; }
+      groups[groups.length - 1].items.push(c);
+    });
+
+    return groups.map((g) => `
+      <div class="cal-hour-group">
+        <div class="cal-hour-label">${g.hour === null ? "All day" : formatHour(g.hour)}</div>
+        ${g.items.map((c) => `
+          <article class="record ${c._conflict ? "conflict" : ""}">
+            <div class="record-top">
+              <strong>${escapeHtml(c.name)}</strong>
+              ${c.isInstall ? `<span class="badge-good">Install</span>` : priorityBadge(c.priority)}
+            </div>
+            ${timeRangeLabel(c) ? `<small>${escapeHtml(timeRangeLabel(c))}</small>` : ""}
+            ${c._conflict ? `<small class="badge-danger">⚠ Overlaps another callback</small>` : ""}
+            ${c.address ? `<small>${escapeHtml(c.address)}</small>` : ""}
+            ${c.notes ? `<p>${escapeHtml(c.notes)}</p>` : ""}
+          </article>`).join("")}
+      </div>`).join("");
+  }
 
   function renderCalendar() {
     const year = Math.floor(calendarMonth / 12);
@@ -801,7 +1065,8 @@
         </button>`;
     }
 
-    const selectedItems = (byDay[calendarSelectedDay] || []).slice().sort((a, b) => new Date(a.remind_at || 0) - new Date(b.remind_at || 0));
+    const selectedItems = sortCalendarItems(byDay[calendarSelectedDay] || []);
+    flagConflicts(selectedItems);
 
     return `
       <section id="calendar" class="section ${activeTab === "calendar" ? "active" : ""}">
@@ -821,19 +1086,7 @@
         </section>
         <section class="card stack">
           <div class="section-title"><h3>${escapeHtml(new Date(calendarSelectedDay + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))}</h3><span>${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}</span></div>
-          ${selectedItems.length ? selectedItems.map((c) => {
-            const timeStr = c.remind_at ? new Date(c.remind_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "";
-            return `
-            <article class="record">
-              <div class="record-top">
-                <strong>${escapeHtml(c.name)}</strong>
-                ${c.isInstall ? `<span class="badge-good">Install</span>` : priorityBadge(c.priority)}
-              </div>
-              ${timeStr ? `<small>${escapeHtml(timeStr)}</small>` : ""}
-              ${c.address ? `<small>${escapeHtml(c.address)}</small>` : ""}
-              ${c.notes ? `<p>${escapeHtml(c.notes)}</p>` : ""}
-            </article>`;
-          }).join("") : empty("Nothing on this day.")}
+          ${selectedItems.length ? renderHourlyGroups(selectedItems) : empty("Nothing on this day.")}
         </section>
       </section>`;
   }
@@ -1026,6 +1279,14 @@
         <div class="section-title">
           <div><h2>Settings</h2><span>Signed in as ${escapeHtml(profile.name)}.</span></div>
         </div>
+        <section class="card stack">
+          <div class="section-title"><h3>My Info</h3><span>Visible to your team</span></div>
+          <label>Name <input id="infoName" value="${escapeAttr(profile.name)}" /></label>
+          <label>Birthday <input id="infoBirthday" type="date" value="${escapeAttr(profile.birthday || "")}" /></label>
+          <label>Cell number <input id="infoPhone" type="tel" value="${escapeAttr(profile.phone || "")}" /></label>
+          <label>Address <input id="infoAddress" value="${escapeAttr(profile.address || "")}" /></label>
+          <button id="saveMyInfo" class="secondary" type="button">Save My Info</button>
+        </section>
         <section class="card stack">
           <h3>Profile</h3>
           ${isAdmin ? `
@@ -1466,6 +1727,7 @@
     bind("#signOut", "click", handleSignOut);
     bind("#saveSettings", "click", saveSettings);
     bind("#addBackfill", "click", addBackfillEntry);
+    bind("#saveMyInfo", "click", saveMyInfo);
     bind("#copyTeamId", "click", () => {
       const input = document.querySelector("#teamIdDisplay");
       if (input) { navigator.clipboard.writeText(input.value).catch(() => {}); }
@@ -1479,6 +1741,9 @@
       sel.addEventListener("change", () => setMemberTeam(sel.dataset.setTeam, sel.value));
     });
     bind("#createTeam", "click", createNewTeam);
+    document.querySelectorAll("[data-reset-password]").forEach((btn) => {
+      btn.addEventListener("click", () => sendPasswordReset(btn.dataset.resetPassword, btn));
+    });
 
     bind("#calPrev", "click", () => { calendarMonth--; render(); });
     bind("#calNext", "click", () => { calendarMonth++; render(); });
@@ -1627,7 +1892,8 @@
     const e = { ...entry };
     if (e.remind_at && !e.date) e.date = dkeyFromDate(new Date(e.remind_at));
     const row = { team_id: teamId, ...e, status: "open" };
-    const { data } = await sb.from("callbacks").insert(row).select().single();
+    const { data, error } = await sb.from("callbacks").insert(row).select().single();
+    if (error) { console.error("Failed to save callback:", error); alert("Couldn't save that callback: " + error.message); return; }
     if (data) callbacks.unshift(data);
   }
 
@@ -1635,11 +1901,14 @@
     const hours = num("#cbHours") || 0;
     const mins = num("#cbMins") || 0;
     const totalMin = hours * 60 + mins || 60;
-    const remindAt = new Date(Date.now() + totalMin * 60000).toISOString();
+    const remindAtMs = Date.now() + totalMin * 60000;
+    const remindAt = new Date(remindAtMs).toISOString();
+    const windowMins = num("#cbWindowMins") || 0;
     await addCallbackToSupabase({
       name: val("#cbName").trim() || "Callback",
       address: val("#cbAddress").trim(),
       remind_at: remindAt,
+      window_end: windowMins > 0 ? new Date(remindAtMs + windowMins * 60000).toISOString() : null,
       priority: val("#cbPriority"),
       notes: val("#cbNotes").trim(),
     });
@@ -1692,7 +1961,8 @@
 
   async function addAccountToSupabase(entry) {
     const row = { team_id: teamId, user_id: session.user.id, ...entry };
-    const { data } = await sb.from("accounts").insert(row).select().single();
+    const { data, error } = await sb.from("accounts").insert(row).select().single();
+    if (error) { console.error("Failed to save account:", error); alert("Couldn't save that account: " + error.message); return; }
     if (data) accounts.unshift(data);
   }
 
@@ -1730,6 +2000,28 @@
     const { data, error } = await sb.from("teams").insert({ name, short_code: generateShortCode() }).select().single();
     if (error) { console.error(error); return; }
     orgTeams.push(data);
+    render();
+  }
+
+  // We can't change another user's password directly without a service-role
+  // backend, but we can safely trigger Supabase's official reset email.
+  async function sendPasswordReset(email, btn) {
+    const { error } = await sb.auth.resetPasswordForEmail(email);
+    if (btn) btn.textContent = error ? "Couldn't send - try again" : "Reset email sent!";
+  }
+
+  async function saveMyInfo() {
+    const updates = {
+      name: val("#infoName").trim() || profile.name,
+      birthday: val("#infoBirthday") || null,
+      phone: val("#infoPhone").trim(),
+      address: val("#infoAddress").trim(),
+    };
+    await sb.from("profiles").update(updates).eq("id", profile.id);
+    Object.assign(profile, updates);
+    const member = teamMembers.find((m) => m.id === profile.id);
+    if (member) Object.assign(member, updates);
+    saveCache();
     render();
   }
 
@@ -2119,6 +2411,7 @@
 
   function memberRecord(member) {
     const isAdmin = profile.role === "admin";
+    const canManage = ["admin", "manager", "regional"].includes(profile.role);
     const isSelf = member.id === profile.id;
     return `
       <div class="user-row">
@@ -2129,6 +2422,8 @@
             : `<span class="pill">${escapeHtml(ROLE_LABELS[member.role] || member.role)}</span>`}
         </div>
         <small>Joined ${new Date(member.created_at).toLocaleDateString()}${member.recruited_by_name ? " · Recruited by " + escapeHtml(member.recruited_by_name) : ""}</small>
+        ${member.phone || member.address ? `<small>${[member.phone, member.address].filter(Boolean).map(escapeHtml).join(" · ")}</small>` : ""}
+        ${canManage && !isSelf && member.email ? `<button class="secondary" data-reset-password="${escapeAttr(member.email)}" type="button">Send Password Reset</button>` : ""}
       </div>`;
   }
 
@@ -2239,15 +2534,17 @@
     }
   }
 
-  // Unlock audio on first tap anywhere (autoplay policies block audio
-  // until a user gesture happens on the page).
-  function unlockAudioOnce() {
+  // Browsers often silently ignore permission prompts and audio playback
+  // triggered automatically on page load - both need a real user gesture
+  // to reliably work, so we wait for the first tap anywhere on the page.
+  function handleFirstInteraction() {
     if (!sharedAudioCtx) {
       try { sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { /* ignore */ }
     }
-    document.removeEventListener("click", unlockAudioOnce);
+    requestNotificationPermission();
+    document.removeEventListener("click", handleFirstInteraction);
   }
-  document.addEventListener("click", unlockAudioOnce);
+  document.addEventListener("click", handleFirstInteraction);
 
   function timezoneOptions() {
     return [
