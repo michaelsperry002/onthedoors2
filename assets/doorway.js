@@ -1006,32 +1006,73 @@
     return `${start} - ${end}`;
   }
 
-  // Breaks the selected day's items into hour buckets so it reads like a
-  // timeline instead of a flat list.
-  function renderHourlyGroups(items) {
-    const groups = [];
-    let lastHour = null;
-    items.forEach((c) => {
-      const hour = c.remind_at ? new Date(c.remind_at).getHours() : null;
-      if (hour !== lastHour) { groups.push({ hour, items: [] }); lastHour = hour; }
-      groups[groups.length - 1].items.push(c);
+  const CAL_HOUR_PX = 60;
+  const CAL_MIN_HOUR = 6;   // 6 AM
+  const CAL_MAX_HOUR = 21;  // 9 PM
+
+  const PRIORITY_BLOCK_COLOR = {
+    hot: "#dc2626", medium: "#ca8a04", low: "#2563eb", dmnh: "#6b7280",
+  };
+
+  // A Google-Calendar-style day timeline: hour gridlines down the side,
+  // each callback positioned and sized by its actual time.
+  function renderDayTimeline(items) {
+    const timed = items.filter((c) => c.remind_at);
+    const allDay = items.filter((c) => !c.remind_at);
+
+    let startHour = CAL_MIN_HOUR, endHour = CAL_MAX_HOUR;
+    timed.forEach((c) => {
+      const s = new Date(c.remind_at);
+      const startFrac = s.getHours() + s.getMinutes() / 60;
+      const e = c.window_end ? new Date(c.window_end) : new Date(s.getTime() + 30 * 60000);
+      const endFrac = e.getHours() + e.getMinutes() / 60;
+      startHour = Math.min(startHour, Math.floor(startFrac));
+      endHour = Math.max(endHour, Math.ceil(endFrac));
     });
 
-    return groups.map((g) => `
-      <div class="cal-hour-group">
-        <div class="cal-hour-label">${g.hour === null ? "All day" : formatHour(g.hour)}</div>
-        ${g.items.map((c) => `
-          <article class="record ${c._conflict ? "conflict" : ""}">
-            <div class="record-top">
-              <strong>${escapeHtml(c.name)}</strong>
-              ${c.isInstall ? `<span class="badge-good">Install</span>` : priorityBadge(c.priority)}
-            </div>
-            ${timeRangeLabel(c) ? `<small>${escapeHtml(timeRangeLabel(c))}</small>` : ""}
-            ${c._conflict ? `<small class="badge-danger">⚠ Overlaps another callback</small>` : ""}
-            ${c.address ? `<small>${escapeHtml(c.address)}</small>` : ""}
-            ${c.notes ? `<p>${escapeHtml(c.notes)}</p>` : ""}
-          </article>`).join("")}
-      </div>`).join("");
+    const totalHours = endHour - startHour;
+    const hourLines = [];
+    for (let h = startHour; h <= endHour; h++) {
+      hourLines.push(`
+        <div class="cal-tl-hour" style="top:${(h - startHour) * CAL_HOUR_PX}px">
+          <span class="cal-tl-hour-label">${formatHour(h % 24)}</span>
+          <div class="cal-tl-hour-line"></div>
+        </div>`);
+    }
+
+    const blocks = timed.map((c) => {
+      const s = new Date(c.remind_at);
+      const startFrac = s.getHours() + s.getMinutes() / 60;
+      const e = c.window_end ? new Date(c.window_end) : new Date(s.getTime() + 30 * 60000);
+      const endFrac = Math.max(startFrac + 0.4, e.getHours() + e.getMinutes() / 60);
+      const top = (startFrac - startHour) * CAL_HOUR_PX;
+      const height = Math.max(28, (endFrac - startFrac) * CAL_HOUR_PX - 2);
+      const color = c.isInstall ? "#16a34a" : (PRIORITY_BLOCK_COLOR[c.priority] || PRIORITY_BLOCK_COLOR.low);
+      return `
+        <div class="cal-tl-block ${c._conflict ? "conflict" : ""}" style="top:${top}px; height:${height}px; border-left-color:${color}">
+          <strong>${escapeHtml(c.name)}</strong>
+          <span>${escapeHtml(timeRangeLabel(c))}${c.address ? " · " + escapeHtml(c.address) : ""}</span>
+          ${c._conflict ? `<span class="badge-danger">⚠ overlaps</span>` : ""}
+        </div>`;
+    }).join("");
+
+    return `
+      ${allDay.length ? `
+        <div class="cal-allday">
+          <div class="cal-hour-label">All day</div>
+          ${allDay.map((c) => `
+            <article class="record">
+              <div class="record-top">
+                <strong>${escapeHtml(c.name)}</strong>
+                ${c.isInstall ? `<span class="badge-good">Install</span>` : priorityBadge(c.priority)}
+              </div>
+              ${c.address ? `<small>${escapeHtml(c.address)}</small>` : ""}
+            </article>`).join("")}
+        </div>` : ""}
+      <div class="cal-timeline" style="height:${totalHours * CAL_HOUR_PX}px">
+        ${hourLines.join("")}
+        <div class="cal-tl-blocks">${blocks}</div>
+      </div>`;
   }
 
   function renderCalendar() {
@@ -1086,7 +1127,7 @@
         </section>
         <section class="card stack">
           <div class="section-title"><h3>${escapeHtml(new Date(calendarSelectedDay + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))}</h3><span>${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}</span></div>
-          ${selectedItems.length ? renderHourlyGroups(selectedItems) : empty("Nothing on this day.")}
+          ${selectedItems.length ? renderDayTimeline(selectedItems) : empty("Nothing on this day.")}
         </section>
       </section>`;
   }

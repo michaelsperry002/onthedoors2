@@ -1255,11 +1255,6 @@ body.comm-mode .mode-toggle {
 }
 
 /* ════ Calendar hourly groups ════ */
-.cal-hour-group {
-  display: grid;
-  gap: 8px;
-}
-
 .cal-hour-label {
   font-size: 11px;
   font-weight: 900;
@@ -1267,6 +1262,87 @@ body.comm-mode .mode-toggle {
   letter-spacing: 0.08em;
   color: var(--muted);
   margin-top: 6px;
+}
+
+.cal-allday {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* ════ Calendar day timeline (Google-Calendar-style) ════ */
+.cal-timeline {
+  position: relative;
+  margin-left: 52px;
+  border-left: 1px solid var(--line);
+}
+
+.cal-tl-hour {
+  position: absolute;
+  left: -52px;
+  right: 0;
+  height: 0;
+}
+
+.cal-tl-hour-label {
+  position: absolute;
+  left: 0;
+  top: -7px;
+  width: 44px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted);
+  text-align: right;
+  padding-right: 6px;
+}
+
+.cal-tl-hour-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-top: 1px solid var(--line);
+}
+
+.cal-tl-blocks {
+  position: relative;
+}
+
+.cal-tl-block {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  border-radius: 8px;
+  border-left: 4px solid;
+  background: var(--panel-2);
+  padding: 5px 9px;
+  overflow: hidden;
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  box-shadow: 0 1px 4px rgba(20, 21, 26, 0.08);
+}
+
+.cal-tl-block strong {
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+
+.cal-tl-block span {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.cal-tl-block.conflict {
+  border-left-color: #dc2626;
+  box-shadow: 0 0 0 1.5px rgba(220, 38, 38, 0.4);
+}
+
+.cal-tl-block .badge-danger {
+  font-size: 10px;
 }
 
 .record.conflict {
