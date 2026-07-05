@@ -1127,7 +1127,7 @@
         </section>
         <section class="card stack">
           <div class="section-title"><h3>${escapeHtml(new Date(calendarSelectedDay + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))}</h3><span>${selectedItems.length} item${selectedItems.length === 1 ? "" : "s"}</span></div>
-          ${selectedItems.length ? renderDayTimeline(selectedItems) : empty("Nothing on this day.")}
+          ${renderDayTimeline(selectedItems)}
         </section>
       </section>`;
   }
