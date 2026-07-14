@@ -117,10 +117,11 @@
       };
 
       function makeBuilder(table) {
-        const op = { type: "select", payload: null, filters: {}, inFilter: null, single: false };
+        const op = { type: "select", payload: null, filters: {}, inFilter: null, gteFilter: null, single: false };
         function match(row) {
           for (const k in op.filters) { if (row[k] !== op.filters[k]) return false; }
           if (op.inFilter && !op.inFilter.vals.includes(row[op.inFilter.col])) return false;
+          if (op.gteFilter && row[op.gteFilter.col] < op.gteFilter.val) return false;
           return true;
         }
         function run() {
@@ -153,6 +154,7 @@
           delete() { op.type = "delete"; return b; },
           eq(col, val) { op.filters[col] = val; return b; },
           in(col, vals) { op.inFilter = { col, vals }; return b; },
+          gte(col, val) { op.gteFilter = { col, val }; return b; },
           order() { return b; },
           single() { op.single = true; return b; },
           then(resolve) { resolve(run()); },

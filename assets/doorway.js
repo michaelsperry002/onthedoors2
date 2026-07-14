@@ -10,6 +10,14 @@
   // ── Constants ───────────────────────────────────────────────────
   const CACHE_KEY = "corekpis.cache.v1";
   const todayKey = () => dkeyFromDate(new Date());
+  // Covers every range the UI offers (today/week/month/year) with room to
+  // spare, without re-downloading a growing team's entire history forever.
+  const LOG_FETCH_WINDOW_DAYS = 400;
+  const logFetchCutoff = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - LOG_FETCH_WINDOW_DAYS);
+    return dkeyFromDate(d);
+  };
   const money = (v) =>
     Number(v || 0).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
@@ -196,7 +204,7 @@
         const [teamsRes, settingsRes, logsRes, accountsRes] = await Promise.all([
           sb.from("teams").select("*").in("id", teamIds),
           sb.from("team_settings").select("*").eq("team_id", teamId).single(),
-          sb.from("logs").select("*").in("team_id", teamIds).order("created_at", { ascending: false }),
+          sb.from("logs").select("*").in("team_id", teamIds).gte("date", logFetchCutoff()).order("created_at", { ascending: false }),
           sb.from("accounts").select("*").in("team_id", teamIds).order("created_at", { ascending: false }),
         ]);
 
@@ -212,7 +220,7 @@
         const [teamRes, settingsRes, logsRes, cbRes, salesRes, membersRes, accountsRes] = await Promise.all([
           sb.from("teams").select("name, short_code").eq("id", teamId).single(),
           sb.from("team_settings").select("*").eq("team_id", teamId).single(),
-          sb.from("logs").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
+          sb.from("logs").select("*").eq("team_id", teamId).gte("date", logFetchCutoff()).order("created_at", { ascending: false }),
           sb.from("callbacks").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
           sb.from("sales").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
           sb.from("profiles").select("*").eq("team_id", teamId),
