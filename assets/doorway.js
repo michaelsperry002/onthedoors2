@@ -22,7 +22,7 @@
     Number(v || 0).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
   const defaultSettings = {
-    app_name: "CORE Kpi's",
+    app_name: "CORE KPI",
     daily_door_goal: 100,
     daily_sales_goal: 2,
     daily_appointment_goal: 6,
@@ -97,17 +97,6 @@
   // (e.g. after a validation error) - only password fields get wiped.
   let authDraft = { teamId: "", recruiter: "", name: "", birthday: "", phone: "", address: "", email: "" };
 
-  // ── Commission Side State ───────────────────────────────────────
-  let appMode = "field"; // "field" or "commission"
-  let commAccounts = [];
-  let commTab = "comm-dashboard";
-  let commRange = "month";
-  let commCustomFrom = "";
-  let commCustomTo = "";
-  let commEditId = null;
-  const FRONTEND_PER_ACCOUNT = 125;
-  const BACKEND_PCT = 0.30;
-  const COMM_CACHE_KEY = "corekpis.comm.v1";
 
   // ── Init ────────────────────────────────────────────────────────
   async function init() {
@@ -159,16 +148,11 @@
         personalGoals = cached.personalGoals || null;
       }
     } catch { /* ignore */ }
-    try {
-      const cc = JSON.parse(localStorage.getItem(COMM_CACHE_KEY));
-      if (cc) commAccounts = cc.commAccounts || [];
-    } catch { /* ignore */ }
   }
 
   function saveCache() {
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({ settings, teamName, logs, callbacks, sales, accounts, personalGoals }));
-      localStorage.setItem(COMM_CACHE_KEY, JSON.stringify({ commAccounts }));
     } catch { /* ignore */ }
   }
 
@@ -329,13 +313,12 @@
   function appRoot() { return document.querySelector("#app"); }
 
   function render() {
-    document.body.classList.toggle("comm-mode", appMode === "commission");
     if (loading) {
-      appRoot().innerHTML = `<main class="screen"><section class="auth-card"><div class="brand"><small>CORE Kpi's</small><h1>Loading...</h1></div></section></main>`;
+      appRoot().innerHTML = `<main class="screen"><section class="auth-card"><div class="brand"><small>CORE KPI</small><h1>Loading...</h1></div></section></main>`;
       return;
     }
     if (!session || !profile) return renderAuth();
-    if (appMode === "commission") renderCommApp(); else renderApp();
+    renderApp();
     animateBars();
   }
 
@@ -346,12 +329,6 @@
     requestAnimationFrame(() => {
       bars.forEach((el) => { el.style.width = el.dataset.pct + "%"; });
     });
-  }
-
-  function toggleAppMode() {
-    appMode = appMode === "field" ? "commission" : "field";
-    if (appMode === "commission" && !commTab) commTab = "comm-dashboard";
-    render();
   }
 
   // A password input with a click-to-reveal eye button.
@@ -372,7 +349,7 @@
       <main class="screen">
         <section class="auth-card">
           <div class="brand">
-            <small>CORE Kpi's</small>
+            <small>CORE KPI</small>
             <h1>${isLogin ? "Sign In" : "Join a Team"}</h1>
             <p class="muted">${isLogin ? "Sign in to your account." : "Enter the Team Code your recruiter gave you."}</p>
           </div>
@@ -509,7 +486,6 @@
         </header>
         ${sections}
       </main>
-      <button class="mode-toggle" id="modeToggle" type="button" aria-label="Switch to Commission view">${switchIconSvg()}</button>
       <nav class="bottom-nav">
         ${nav.map((item) => `
           <button class="nav-btn ${activeTab === item.id ? "active" : ""}" data-tab="${item.id}" type="button">
@@ -518,7 +494,6 @@
       </nav>
       ${profile.needs_onboarding ? renderOnboarding() : ""}`;
 
-    bind("#modeToggle", "click", toggleAppMode);
     document.querySelectorAll("[data-tab]").forEach((btn) => {
       btn.addEventListener("click", () => go(btn.dataset.tab));
     });
@@ -536,7 +511,7 @@
 
   // ── First-login Onboarding ────────────────────────────────────────
   const ONBOARDING_STEPS = [
-    { title: "Welcome to CORE Kpi's!", body: "This is where you'll track every door you knock, every day." },
+    { title: "Welcome to CORE KPI!", body: "This is where you'll track every door you knock, every day." },
     { title: "Log as you walk", body: "Tap Log and hit a button every time something happens - a door, an answer, a pitch, a sale." },
     { title: "Never miss a callback", body: "Set a callback timer and it'll alert you when it's time to go back. Check Calendar to see them by day." },
     { title: "Watch your goals", body: "Dashboard shows your progress against today's goals, live, as you knock." },
@@ -1180,7 +1155,7 @@
                 <strong>${escapeHtml(r.name)}</strong>
                 <span class="pill">${escapeHtml(r.role)}</span>
               </div>
-              <div class="comm-account-meta">
+              <div class="stat-row-meta">
                 <span>${r.doors} doors</span>
                 <span>${r.sales} sales</span>
                 <span>${r.closeRate}% close</span>
@@ -1807,9 +1782,9 @@
   }
 
   function shareTeamCode() {
-    const text = `Join my team on CORE Kpi's! Open the app and tap "Join existing team", then enter this code: ${teamShortCode}`;
+    const text = `Join my team on CORE KPI! Open the app and tap "Join existing team", then enter this code: ${teamShortCode}`;
     if (navigator.share) {
-      navigator.share({ title: "Join my CORE Kpi's team", text }).catch(() => {});
+      navigator.share({ title: "Join my CORE KPI team", text }).catch(() => {});
     } else {
       navigator.clipboard.writeText(text).catch(() => {});
     }
@@ -2607,14 +2582,6 @@
     ];
   }
 
-  function switchIconSvg() {
-    return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="12" cy="12" r="10.5" stroke="currentColor" stroke-width="1.6"/>
-      <path d="M7 9.5h8.5M15.5 9.5L12.5 6.5M15.5 9.5L12.5 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M17 14.5H8.5M8.5 14.5L11.5 11.5M8.5 14.5L11.5 17.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`;
-  }
-
   function go(tab) { activeTab = tab; location.hash = tab; render(); }
   function bind(sel, ev, fn) { const el = document.querySelector(sel); if (el) el.addEventListener(ev, fn); }
   function val(sel) { return document.querySelector(sel)?.value || ""; }
@@ -2645,560 +2612,6 @@
     return String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
   function escapeAttr(t) { return escapeHtml(t); }
-
-  // ════════════════════════════════════════════════════════════════
-  //  COMMISSION SIDE
-  // ════════════════════════════════════════════════════════════════
-
-  const commNav = [
-    { id: "comm-dashboard", label: "Overview" },
-    { id: "comm-accounts", label: "Accounts" },
-    { id: "comm-payouts", label: "Payouts" },
-    { id: "comm-settings", label: "Settings" },
-  ];
-
-  const COMM_STATUSES = ["sold", "pending", "active", "serviced", "cancelled"];
-  const COMM_STATUS_LABELS = { sold: "Sold", pending: "Pending", active: "Active", serviced: "Serviced", cancelled: "Cancelled" };
-
-  function renderCommApp() {
-    const commSections = `${renderCommDashboard()}${renderCommAccounts()}${renderCommPayouts()}${renderCommSettings()}`;
-    appRoot().innerHTML = `
-      <main class="app">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">Commission Tracker</p>
-            <h1>Accounts & Pay</h1>
-          </div>
-          <div class="top-actions">
-            <span class="clock-pill" id="topClock">${clockText()}</span>
-            <span class="pill">${escapeHtml(profile?.name || "User")}</span>
-          </div>
-        </header>
-        ${commSections}
-      </main>
-      <button class="mode-toggle mode-toggle-comm" id="modeToggle" type="button" aria-label="Switch to Field view">${switchIconSvg()}</button>
-      <nav class="bottom-nav">
-        ${commNav.map((item) => `
-          <button class="nav-btn ${commTab === item.id ? "active" : ""}" data-comm-tab="${item.id}" type="button">
-            <span>${item.label}</span>
-          </button>`).join("")}
-      </nav>`;
-
-    bind("#modeToggle", "click", toggleAppMode);
-    document.querySelectorAll("[data-comm-tab]").forEach((btn) => {
-      btn.addEventListener("click", () => { commTab = btn.dataset.commTab; render(); });
-    });
-    bindCommEvents();
-    scrollActiveNavIntoView();
-  }
-
-  function commStats() {
-    const live = commAccounts.filter((a) => a.status !== "cancelled");
-    const serviced = live.filter((a) => a.status === "serviced");
-    const active = live.filter((a) => a.status === "active");
-    const totalContract = live.reduce((s, a) => s + Number(a.contract_value || 0), 0);
-    const servicedContract = serviced.reduce((s, a) => s + Number(a.contract_value || 0), 0);
-    const activeContract = active.reduce((s, a) => s + Number(a.contract_value || 0), 0);
-    // Frontend ($125) is earned once an account is serviced.
-    const frontendEarned = serviced.length * FRONTEND_PER_ACCOUNT;
-    // Backend: 30% of contract value on all non-cancelled accounts, minus the $125 already taken per serviced account, paid in Dec.
-    const backendGross = totalContract * BACKEND_PCT;
-    const backendProjected = backendGross - frontendEarned;
-    const cancelled = commAccounts.filter((a) => a.status === "cancelled");
-    const chargebackRisk = live.filter((a) => a.status !== "serviced").reduce((s, a) => s + Number(a.contract_value || 0), 0) * BACKEND_PCT;
-    const cancelledValue = cancelled.reduce((s, a) => s + Number(a.contract_value || 0), 0);
-    const lostFrontend = cancelled.length * FRONTEND_PER_ACCOUNT;
-    const lostBackend = cancelledValue * BACKEND_PCT;
-    return { live, serviced, active, installed: serviced, totalContract, servicedContract, activeContract, installedContract: servicedContract, frontendEarned, backendGross, backendProjected, cancelled, chargebackRisk, cancelledValue, lostFrontend, lostBackend, total: commAccounts.length };
-  }
-
-  function renderCommDashboard() {
-    const s = commStats();
-    const decDate = new Date(new Date().getFullYear(), 11, 1);
-    const daysUntilBackend = Math.max(0, Math.round((decDate - new Date()) / 86400000));
-    const monthlyAccounts = commMonthlyTrend();
-    const bestDays = commBestDays();
-    const rangeAccts = commAccountsInRange();
-    const rangeValue = rangeAccts.reduce((sum, a) => sum + Number(a.contract_value || 0), 0);
-    const activeList = [...s.active, ...s.serviced].sort((a, b) => Number(b.contract_value || 0) - Number(a.contract_value || 0));
-
-    return `
-      <section id="comm-dashboard" class="section ${commTab === "comm-dashboard" ? "active" : ""}">
-        <div class="section-title">
-          <div><h2>Commission Overview</h2><span>${s.total} total accounts</span></div>
-        </div>
-
-        <div class="tabs range-tabs">
-          ${["month", "year"].map((i) => `<button class="${commRange === i ? "active" : ""}" data-comm-range="${i}">${capitalize(i)}</button>`).join("")}
-          <button class="${commRange === "all" ? "active" : ""}" data-comm-range="all">All</button>
-          <button class="${commRange === "custom" ? "active" : ""}" data-comm-range="custom">Custom</button>
-        </div>
-        ${commRange === "custom" ? `
-          <div class="custom-range-row">
-            <label>From <input type="date" id="commFrom" value="${commCustomFrom}" /></label>
-            <label>To <input type="date" id="commTo" value="${commCustomTo}" /></label>
-            <button class="primary" id="applyCommRange" type="button">Apply</button>
-          </div>` : ""}
-        <div class="grid-2">
-          ${commStat(capitalize(commRange) + " Accounts", rangeAccts.length, "sold")}
-          ${commStat(capitalize(commRange) + " Contract", money(rangeValue), "value")}
-        </div>
-
-        <div class="grid-2">
-          ${commStat("Active Accounts", s.active.length, money(s.activeContract))}
-          ${commStat("Serviced", s.serviced.length, money(s.servicedContract))}
-          ${commStat("Frontend Earned", money(s.frontendEarned), `$${FRONTEND_PER_ACCOUNT}/serviced`)}
-          ${commStat("Backend (Dec)", money(s.backendProjected), "net projected")}
-        </div>
-
-        <section class="card stack comm-total-card">
-          <div class="section-title"><h3>Total Contract Value</h3><span>All live accounts combined</span></div>
-          <div class="comm-countdown">
-            <strong>${money(s.totalContract)}</strong>
-            <span>${s.live.length} active + serviced accounts</span>
-          </div>
-          <div class="grid-2">
-            ${commStat("Total Commission", money(s.frontendEarned + s.backendProjected), "front + back")}
-            ${commStat("Avg / Account", money(s.live.length ? s.totalContract / s.live.length : 0), "contract")}
-          </div>
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Earnings Breakdown</h3><span>${new Date().getFullYear()}</span></div>
-          ${commProgress("Frontend ($125/serviced)", s.frontendEarned, Math.max(s.frontendEarned + s.active.length * FRONTEND_PER_ACCOUNT, FRONTEND_PER_ACCOUNT))}
-          ${commProgress("Backend (net, in Dec)", Math.max(0, s.backendProjected), Math.max(s.backendGross, 1))}
-          ${commProgress("Total Projected", s.frontendEarned + Math.max(0, s.backendProjected), Math.max((s.frontendEarned + s.backendProjected) * 1.2, 1))}
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Backend Countdown</h3><span>December payout</span></div>
-          <div class="comm-countdown">
-            <strong>${daysUntilBackend}</strong>
-            <span>days until backend payout</span>
-          </div>
-          <div class="grid-2">
-            ${commStat("Projected", money(Math.max(0, s.backendProjected)), "if no cancels")}
-            ${commStat("At Risk", money(s.chargebackRisk), "not yet serviced")}
-          </div>
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Active Accounts</h3><span>${activeList.length} live</span></div>
-          ${activeList.length ? activeList.slice(0, 8).map((a) => `
-            <div class="progress-row">
-              <div class="row-head"><b>${escapeHtml(a.customer_name)}</b><span class="pill comm-status-${a.status}">${COMM_STATUS_LABELS[a.status]}</span></div>
-              <div class="muted">${money(a.contract_value)} contract · ${money(Number(a.contract_value || 0) * BACKEND_PCT)} backend</div>
-            </div>`).join("") : empty("No active accounts.")}
-        </section>
-
-        <div class="desktop-grid">
-          <section class="card stack">
-            <div class="section-title"><h3>Monthly Sales</h3><span>Accounts sold</span></div>
-            ${miniBars(monthlyAccounts, "count")}
-          </section>
-          <section class="card stack">
-            <div class="section-title"><h3>Monthly Revenue</h3><span>Contract value</span></div>
-            ${miniBars(monthlyAccounts, "value", true)}
-          </section>
-        </div>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Best Selling Days</h3><span>By weekday</span></div>
-          ${miniBars(bestDays, "count")}
-        </section>
-
-        ${s.cancelled.length ? `
-        <section class="card stack">
-          <div class="section-title"><h3>Chargebacks</h3><span>${s.cancelled.length} cancelled</span></div>
-          <div class="grid-2">
-            ${commStat("Lost Frontend", money(s.lostFrontend), `${s.cancelled.length} × $${FRONTEND_PER_ACCOUNT}`)}
-            ${commStat("Lost Backend", money(s.lostBackend), "30% clawed back")}
-          </div>
-        </section>` : ""}
-
-        <section class="card stack">
-          <div class="section-title"><h3>Account Pipeline</h3><span>Status breakdown</span></div>
-          <div class="chart-grid">
-            ${["sold", "pending", "active", "serviced"].map((st) => {
-              const cnt = commAccounts.filter((a) => a.status === st).length;
-              return chartRow(COMM_STATUS_LABELS[st], cnt, Math.max(s.total, 1), st === "serviced" ? "var(--sale)" : st === "active" ? "var(--blue)" : st === "pending" ? "var(--yellow)" : "var(--purple)");
-            }).join("")}
-          </div>
-        </section>
-      </section>`;
-  }
-
-  function renderCommAccounts() {
-    const sorted = [...commAccounts].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-    const statusFilter = "";
-    return `
-      <section id="comm-accounts" class="section ${commTab === "comm-accounts" ? "active" : ""}">
-        <div class="section-title">
-          <div><h2>Accounts</h2><span>${commAccounts.length} total</span></div>
-        </div>
-        <section class="card stack">
-          <div class="section-title"><h3>Add Account</h3><span>Manual entry</span></div>
-          <div class="form-grid">
-            <label>Customer name <input id="commCustName" placeholder="Customer name" /></label>
-            <label>Address <input id="commAddress" placeholder="123 Oak Street" /></label>
-            <div class="split">
-              <label>Contract value <input id="commValue" type="number" placeholder="0" /></label>
-              <label>Status
-                <select id="commStatus">${COMM_STATUSES.filter((s) => s !== "cancelled").map((s) => `<option value="${s}" ${s === "sold" ? "selected" : ""}>${COMM_STATUS_LABELS[s]}</option>`).join("")}</select>
-              </label>
-            </div>
-            <div class="split">
-              <label>Sale date <input id="commSaleDate" type="date" value="${todayKey()}" /></label>
-              <label>Install date <input id="commInstallDate" type="date" /></label>
-            </div>
-            <label>Notes <textarea id="commNotes" placeholder="Account notes"></textarea></label>
-            <button id="addCommAccount" class="primary" type="button">Add Account</button>
-          </div>
-        </section>
-        <section class="card stack">
-          <div class="section-title"><h3>All Accounts</h3><span>${sorted.length} entries</span></div>
-          ${sorted.length ? sorted.map(commAccountRecord).join("") : empty("No accounts yet. Add one above or connect Sequifi.")}
-        </section>
-      </section>`;
-  }
-
-  function renderCommPayouts() {
-    const s = commStats();
-    const now = new Date();
-    const biweeklyStart = new Date(now.getFullYear(), 0, 6); // First Monday-ish of Jan
-    const msSinceCycleStart = now - biweeklyStart;
-    const cycleNum = Math.floor(msSinceCycleStart / (14 * 86400000));
-    const nextPayout = new Date(biweeklyStart.getTime() + (cycleNum + 1) * 14 * 86400000);
-    const daysUntilPayout = Math.max(0, Math.round((nextPayout - now) / 86400000));
-
-    const recentInstalls = commAccounts.filter((a) => {
-      if (a.status !== "serviced") return false;
-      const d = new Date(a.install_date || a.sale_date || a.created_at);
-      return (now - d) / 86400000 <= 14;
-    });
-    const nextFrontend = recentInstalls.length * FRONTEND_PER_ACCOUNT;
-
-    const payoutHistory = commPayoutHistory();
-
-    return `
-      <section id="comm-payouts" class="section ${commTab === "comm-payouts" ? "active" : ""}">
-        <div class="section-title">
-          <div><h2>Payouts</h2><span>Frontend bi-weekly · Backend in December</span></div>
-        </div>
-        <div class="grid-2">
-          ${commStat("Next Payout", daysUntilPayout + " days", nextPayout.toLocaleDateString(undefined, { month: "short", day: "numeric" }))}
-          ${commStat("Est. Amount", money(nextFrontend), `${recentInstalls.length} installs × $${FRONTEND_PER_ACCOUNT}`)}
-        </div>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Frontend Payouts</h3><span>Bi-weekly ($${FRONTEND_PER_ACCOUNT}/install)</span></div>
-          ${commProgress("Total Frontend Earned", s.frontendEarned, s.frontendEarned + nextFrontend)}
-          <div class="grid-2">
-            ${commStat("Total Paid", money(s.frontendEarned), `${s.installed.length} installs`)}
-            ${commStat("Upcoming", money(nextFrontend), `${recentInstalls.length} this cycle`)}
-          </div>
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Backend Payout</h3><span>December ${now.getFullYear()}</span></div>
-          <div class="comm-countdown">
-            <strong>${money(s.backendProjected)}</strong>
-            <span>projected backend (30% of contract value)</span>
-          </div>
-          ${commProgress("Backend Earned vs Potential", s.backendProjected, s.totalContract * BACKEND_PCT)}
-          ${s.cancelled.length ? `<div class="muted" style="padding:8px 0">⚠ ${s.cancelled.length} cancellation(s) reduced backend by ${money(s.lostBackend)}</div>` : ""}
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Payout History</h3><span>Monthly totals</span></div>
-          ${miniBars(payoutHistory, "frontend", true)}
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Chargeback Risk</h3><span>Accounts that could cancel before Dec</span></div>
-          ${s.live.length ? s.live.filter((a) => a.status !== "serviced").map((a) => `
-            <div class="progress-row">
-              <div class="row-head"><b>${escapeHtml(a.customer_name)}</b><span class="badge-hot">${money(Number(a.contract_value || 0) * BACKEND_PCT)} at risk</span></div>
-              <div class="muted">Status: ${COMM_STATUS_LABELS[a.status] || a.status} · ${money(a.contract_value)}</div>
-            </div>`).join("") : empty("All accounts installed — low chargeback risk.")}
-        </section>
-      </section>`;
-  }
-
-  function renderCommSettings() {
-    return `
-      <section id="comm-settings" class="section ${commTab === "comm-settings" ? "active" : ""}">
-        <div class="section-title">
-          <div><h2>Commission Settings</h2><span>Pay structure and integrations</span></div>
-        </div>
-        <section class="card stack">
-          <h3>Pay Structure</h3>
-          <div class="split">
-            <label>Frontend per install <input id="commFrontendRate" type="number" value="${FRONTEND_PER_ACCOUNT}" disabled /></label>
-            <label>Backend % <input id="commBackendPct" type="number" value="${BACKEND_PCT * 100}" disabled /></label>
-          </div>
-          <div class="muted">Pay rates are set by your company. Contact your manager to update.</div>
-        </section>
-        <section class="card stack">
-          <h3>Sequifi Integration</h3>
-          <div class="muted">Use the Sequifi Sync tool to pull your real sales. It creates an <b>accounts.json</b> file — load it here and your accounts appear instantly.</div>
-          <label class="primary" for="commImportFile" style="display:block;text-align:center;cursor:pointer">Import from Sequifi (accounts.json)</label>
-          <input id="commImportFile" type="file" accept=".json,application/json" style="display:none" />
-          <div id="commImportMsg" class="muted"></div>
-        </section>
-        <section class="card stack">
-          <h3>Data</h3>
-          <div class="wide-actions">
-            <button id="exportCommJson" class="secondary" type="button">Export Commission Data</button>
-            <button id="clearCommData" class="ghost" type="button">Clear All Commission Data</button>
-          </div>
-        </section>
-      </section>`;
-  }
-
-  function commAccountRecord(acc) {
-    if (commEditId === acc.id) return commAccountEditForm(acc);
-    const cv = Number(acc.contract_value || 0);
-    const frontend = (acc.status === "serviced") ? FRONTEND_PER_ACCOUNT : 0;
-    const backend = (acc.status !== "cancelled") ? cv * BACKEND_PCT : 0;
-    const isCancelled = acc.status === "cancelled";
-    const srcBadge = acc.source === "sequifi" ? `<span class="src-badge${acc.edited ? " edited" : ""}">Sequifi${acc.edited ? " · edited" : ""}</span>` : `<span class="src-badge manual">Manual</span>`;
-    return `
-      <article class="record ${isCancelled ? "comm-cancelled" : ""}">
-        <div class="record-top">
-          <strong>${escapeHtml(acc.customer_name)}</strong>
-          <span class="pill comm-status-${acc.status}">${COMM_STATUS_LABELS[acc.status] || acc.status}</span>
-        </div>
-        ${acc.address ? `<small>${escapeHtml(acc.address)}</small>` : ""}
-        <div class="comm-account-meta">
-          <span>Contract: ${money(cv)}</span>
-          <span>Frontend: ${money(frontend)}</span>
-          <span>Backend: ${money(backend)}</span>
-        </div>
-        <div class="comm-account-meta">
-          ${acc.sale_date ? `<span>Sold: ${escapeHtml(acc.sale_date)}</span>` : ""}
-          ${acc.install_date ? `<span>Serviced: ${escapeHtml(acc.install_date)}</span>` : ""}
-          ${srcBadge}
-        </div>
-        ${acc.notes ? `<p>${escapeHtml(acc.notes)}</p>` : ""}
-        <div class="form-actions">
-          <select data-comm-status="${acc.id}" class="comm-status-select">
-            ${COMM_STATUSES.map((s) => `<option value="${s}" ${acc.status === s ? "selected" : ""}>${COMM_STATUS_LABELS[s]}</option>`).join("")}
-          </select>
-          <button class="secondary" data-edit-comm="${acc.id}" type="button">Edit</button>
-          <button class="danger" data-remove-comm="${acc.id}" type="button">Remove</button>
-        </div>
-      </article>`;
-  }
-
-  // Inline editor — works for any account, including ones synced from Sequifi.
-  function commAccountEditForm(acc) {
-    return `
-      <article class="record comm-editing">
-        <div class="section-title"><h3>Edit Account</h3><span>${acc.source === "sequifi" ? "Sequifi override" : "Manual"}</span></div>
-        <div class="form-grid">
-          <label>Customer name <input id="editName" value="${escapeAttr(acc.customer_name)}" /></label>
-          <label>Address <input id="editAddress" value="${escapeAttr(acc.address || "")}" /></label>
-          <div class="split">
-            <label>Contract value <input id="editValue" type="number" value="${Number(acc.contract_value || 0)}" /></label>
-            <label>Status
-              <select id="editStatus">${COMM_STATUSES.map((s) => `<option value="${s}" ${acc.status === s ? "selected" : ""}>${COMM_STATUS_LABELS[s]}</option>`).join("")}</select>
-            </label>
-          </div>
-          <div class="split">
-            <label>Sale date <input id="editSaleDate" type="date" value="${escapeAttr(acc.sale_date || "")}" /></label>
-            <label>Serviced date <input id="editInstallDate" type="date" value="${escapeAttr(acc.install_date || "")}" /></label>
-          </div>
-          <label>Notes <textarea id="editNotes">${escapeHtml(acc.notes || "")}</textarea></label>
-          <div class="form-actions">
-            <button class="primary" data-save-comm="${acc.id}" type="button">Save</button>
-            <button class="ghost" data-cancel-edit="1" type="button">Cancel</button>
-          </div>
-        </div>
-      </article>`;
-  }
-
-  function commStat(label, value, sub) {
-    return `<div class="stat-card"><span>${label}</span><strong>${value}</strong><em>${sub || ""}</em></div>`;
-  }
-
-  function commProgress(label, current, max) {
-    const p = max > 0 ? Math.min(100, (current / max) * 100) : 0;
-    return `
-      <div class="progress-row">
-        <div class="row-head"><b>${label}</b><span class="muted">${money(current)} / ${money(max)}</span></div>
-        <div class="bar"><span data-pct="${p}" style="width:0%"></span></div>
-      </div>`;
-  }
-
-  function commAccountsInRange() {
-    const now = new Date();
-    return commAccounts.filter((a) => {
-      if (a.status === "cancelled") return false;
-      const d = new Date(a.sale_date || a.created_at);
-      if (commRange === "month") return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-      if (commRange === "year") return d.getFullYear() === now.getFullYear();
-      if (commRange === "custom" && commCustomFrom && commCustomTo) {
-        const key = dkeyFromDate(d);
-        return key >= commCustomFrom && key <= commCustomTo;
-      }
-      return true; // "all"
-    });
-  }
-
-  function commBestDays() {
-    const buckets = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ short: ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][i], count: 0, value: 0 }));
-    commAccounts.forEach((a) => {
-      if (a.status === "cancelled") return;
-      const d = new Date(a.sale_date || a.created_at);
-      const b = buckets[d.getDay()];
-      if (b) { b.count += 1; b.value += Number(a.contract_value || 0); }
-    });
-    return buckets;
-  }
-
-  function commMonthlyTrend() {
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(); d.setMonth(d.getMonth() - i);
-      const y = d.getFullYear(), m = d.getMonth();
-      const inMonth = commAccounts.filter((a) => {
-        const sd = new Date(a.sale_date || a.created_at);
-        return sd.getFullYear() === y && sd.getMonth() === m;
-      });
-      months.push({
-        short: d.toLocaleDateString(undefined, { month: "short" }).slice(0, 3),
-        count: inMonth.length,
-        value: inMonth.reduce((s, a) => s + Number(a.contract_value || 0), 0),
-      });
-    }
-    return months;
-  }
-
-  function commPayoutHistory() {
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(); d.setMonth(d.getMonth() - i);
-      const y = d.getFullYear(), m = d.getMonth();
-      const installed = commAccounts.filter((a) => {
-        if (a.status !== "serviced") return false;
-        const id = new Date(a.install_date || a.sale_date || a.created_at);
-        return id.getFullYear() === y && id.getMonth() === m;
-      });
-      months.push({
-        short: d.toLocaleDateString(undefined, { month: "short" }).slice(0, 3),
-        frontend: installed.length * FRONTEND_PER_ACCOUNT,
-      });
-    }
-    return months;
-  }
-
-  function bindCommEvents() {
-    bind("#addCommAccount", "click", addCommAccount);
-    bind("#exportCommJson", "click", () => download("commission-backup.json", JSON.stringify(commAccounts, null, 2), "application/json"));
-    bind("#commImportFile", "change", importCommFile);
-    bind("#clearCommData", "click", () => { if (confirm("Delete all commission data?")) { commAccounts = []; saveCache(); render(); } });
-
-    document.querySelectorAll("[data-comm-range]").forEach((btn) => {
-      btn.addEventListener("click", () => { commRange = btn.dataset.commRange; render(); });
-    });
-    bind("#applyCommRange", "click", () => {
-      commCustomFrom = val("#commFrom");
-      commCustomTo = val("#commTo");
-      render();
-    });
-
-    document.querySelectorAll("[data-comm-status]").forEach((sel) => {
-      sel.addEventListener("change", () => {
-        const acc = commAccounts.find((a) => a.id === sel.dataset.commStatus);
-        if (acc) { acc.status = sel.value; if (acc.source === "sequifi") acc.edited = true; saveCache(); render(); }
-      });
-    });
-
-    document.querySelectorAll("[data-edit-comm]").forEach((btn) => {
-      btn.addEventListener("click", () => { commEditId = btn.dataset.editComm; render(); });
-    });
-    document.querySelectorAll("[data-cancel-edit]").forEach((btn) => {
-      btn.addEventListener("click", () => { commEditId = null; render(); });
-    });
-    document.querySelectorAll("[data-save-comm]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const acc = commAccounts.find((a) => a.id === btn.dataset.saveComm);
-        if (acc) {
-          acc.customer_name = val("#editName").trim() || acc.customer_name;
-          acc.address = val("#editAddress").trim();
-          acc.contract_value = num("#editValue") || 0;
-          acc.status = val("#editStatus");
-          acc.sale_date = val("#editSaleDate");
-          acc.install_date = val("#editInstallDate");
-          acc.notes = val("#editNotes").trim();
-          if (acc.source === "sequifi") acc.edited = true;
-        }
-        commEditId = null;
-        saveCache();
-        render();
-      });
-    });
-
-    document.querySelectorAll("[data-remove-comm]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        commAccounts = commAccounts.filter((a) => a.id !== btn.dataset.removeComm);
-        saveCache();
-        render();
-      });
-    });
-  }
-
-  // Load accounts.json produced by the Sequifi Sync tool. Merges by id so
-  // re-importing updates existing accounts instead of duplicating them.
-  function importCommFile(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result);
-        const incoming = Array.isArray(parsed) ? parsed : parsed.commAccounts || [];
-        if (!incoming.length) throw new Error("No accounts found in that file.");
-        const byId = {};
-        commAccounts.forEach((a) => { byId[a.id] = a; });
-        incoming.forEach((a) => {
-          // Keep any manual edits the user made on top of a Sequifi account.
-          const existing = byId[a.id];
-          byId[a.id] = existing && existing.edited ? { ...a, ...existing } : { ...existing, ...a };
-        });
-        commAccounts = Object.values(byId);
-        saveCache();
-        const msg = document.querySelector("#commImportMsg");
-        if (msg) { msg.textContent = `✅ Imported ${incoming.length} accounts from Sequifi.`; msg.style.color = "#16a34a"; }
-        render();
-      } catch (err) {
-        const msg = document.querySelector("#commImportMsg");
-        if (msg) { msg.textContent = "⚠ Couldn't read that file: " + err.message; msg.style.color = "#dc2626"; }
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function addCommAccount() {
-    const name = val("#commCustName").trim();
-    if (!name) return;
-    const acc = {
-      id: "comm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-      customer_name: name,
-      address: val("#commAddress").trim(),
-      contract_value: num("#commValue") || 0,
-      status: val("#commStatus") || "sold",
-      sale_date: val("#commSaleDate") || todayKey(),
-      install_date: val("#commInstallDate") || "",
-      notes: val("#commNotes").trim(),
-      created_at: new Date().toISOString(),
-      source: "manual",
-    };
-    commAccounts.unshift(acc);
-    saveCache();
-    render();
-  }
 
   init();
 })();
