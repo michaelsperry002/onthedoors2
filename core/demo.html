@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CORE — Demo</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="assets/core.css" />
+    <script>
+      // Mock Supabase client so the CORE app runs with fake data.
+      (() => {
+        const ADMIN_ID = "u-admin";
+        const teams = [
+          { id: "t1", name: "Desert Hawks", short_code: "HAWK22", created_at: "2025-01-01" },
+          { id: "t2", name: "Valley Wolves", short_code: "WOLF88", created_at: "2025-03-01" },
+        ];
+        const profiles = [
+          { id: ADMIN_ID, team_id: "t1", role: "admin", name: "Michael Sperry", email: "michaelsperry002@gmail.com", disabled: false, created_at: "2025-01-01" },
+          { id: "u1", team_id: "t1", role: "manager", name: "Sam Patel", email: "sam@x.com", disabled: false, created_at: "2025-02-01", recruited_by_name: "Michael Sperry" },
+          { id: "u2", team_id: "t1", role: "rep", name: "Maria Lopez", email: "maria@x.com", disabled: false, created_at: "2025-02-15" },
+          { id: "u3", team_id: "t2", role: "rep", name: "Tyler Nguyen", email: "tyler@x.com", disabled: false, created_at: "2025-04-01" },
+          { id: "u4", team_id: "t2", role: "rep", name: "Devin Carter", email: "devin@x.com", disabled: true, created_at: "2025-04-10" },
+        ];
+        const logs = [];
+        const pad = (n) => String(n).padStart(2, "0");
+        const users = ["u1", "u2", "u3"];
+        for (let d = 0; d < 30; d++) {
+          const dt = new Date(); dt.setDate(dt.getDate() - d);
+          const date = dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate());
+          users.forEach((uid, ui) => {
+            const n = 8 + ((d + ui) % 5);
+            for (let k = 0; k < n; k++) {
+              const outcome = k === 0 ? "sale" : k < 4 ? "answered" : "no_answer";
+              logs.push({
+                id: `l-${uid}-${d}-${k}`, user_id: uid, team_id: profiles.find((p) => p.id === uid).team_id,
+                outcome, date, contract_value: outcome === "sale" ? 2800 + (k * 37) + d * 11 : 0,
+                created_at: date + "T" + pad(10 + (k % 9)) + ":00:00Z",
+              });
+            }
+          });
+        }
+        const tables = { teams, profiles, logs };
+
+        function makeBuilder(table) {
+          const op = { filters: {}, gteFilter: null, single: false, insertRow: null, updatePatch: null, del: false };
+          function match(row) {
+            for (const k in op.filters) if (row[k] !== op.filters[k]) return false;
+            if (op.gteFilter && row[op.gteFilter.col] < op.gteFilter.val) return false;
+            return true;
+          }
+          function exec() {
+            const rows = tables[table] || [];
+            if (op.insertRow) {
+              const row = { id: "new-" + Math.random().toString(36).slice(2, 8), created_at: new Date().toISOString(), ...op.insertRow };
+              rows.push(row);
+              return { data: op.single ? row : [row], error: null };
+            }
+            if (op.updatePatch) {
+              rows.filter(match).forEach((r) => Object.assign(r, op.updatePatch));
+              return { data: null, error: null };
+            }
+            if (op.del) {
+              tables[table] = rows.filter((r) => !match(r));
+              return { data: null, error: null };
+            }
+            const out = rows.filter(match);
+            return op.single ? { data: out[0] || null, error: out[0] ? null : { message: "not found" } } : { data: out, error: null };
+          }
+          const b = {
+            select() { return b; },
+            insert(row) { op.insertRow = row; return b; },
+            update(patch) { op.updatePatch = patch; return b; },
+            delete() { op.del = true; return b; },
+            eq(col, v) { op.filters[col] = v; return b; },
+            gte(col, v) { op.gteFilter = { col, val: v }; return b; },
+            order() { return b; },
+            single() { op.single = true; return Promise.resolve(exec()); },
+            then(res, rej) { return Promise.resolve(exec()).then(res, rej); },
+          };
+          return b;
+        }
+
+        window.__CORE_MOCK_SB = {
+          auth: {
+            async getSession() {
+              return { data: { session: { user: { id: ADMIN_ID, email: "michaelsperry002@gmail.com" } } } };
+            },
+            onAuthStateChange() {},
+            async signInWithPassword() { return { data: { session: { user: { id: ADMIN_ID, email: "michaelsperry002@gmail.com" } } }, error: null }; },
+            async signOut() { return {}; },
+            async signUp({ email }) {
+              return { data: { user: { id: "new-" + Math.random().toString(36).slice(2, 8), email } }, error: null };
+            },
+            async resetPasswordForEmail() { return { error: null }; },
+          },
+          from: makeBuilder,
+        };
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="assets/core.js"></script>
+  </body>
+</html>

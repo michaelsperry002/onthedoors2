@@ -237,3 +237,13 @@ create policy "Admin reads all accounts" on accounts for select using (is_admin(
 -- Run this now if callbacks aren't working. ──
 -- alter table callbacks add column if not exists remind_at timestamptz;
 -- alter table callbacks add column if not exists window_end timestamptz;
+
+-- ── Migration: CORE admin app ──
+-- The CORE app (admin control hub) needs the org admin to be able to
+-- read and manage everything across every team. Run this whole block.
+create policy "Admin reads all sales" on sales for select using (is_admin());
+create policy "Admin reads all callbacks" on callbacks for select using (is_admin());
+create policy "Admin inserts any team_settings" on team_settings for insert with check (is_admin());
+create policy "Admin updates any team_settings" on team_settings for update using (is_admin());
+create policy "Admin updates all accounts" on accounts for update using (is_admin());
+create policy "Admin deletes teams" on teams for delete using (is_admin());

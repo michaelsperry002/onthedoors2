@@ -81,8 +81,6 @@
   let sales = [];
   let accounts = [];
   let allTeams = [];
-  let orgTeams = [];
-  let orgProfiles = [];
   let activeTab = location.hash.replace("#", "") || "dashboard";
   let range = "today";
   let customFrom = "";
@@ -176,6 +174,14 @@
     try {
       const { data: prof } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
       if (!prof) { profile = null; return; }
+      if (prof.disabled) {
+        // Deactivated in CORE: lock them out of the app entirely.
+        await sb.auth.signOut();
+        session = null;
+        profile = null;
+        alert("Your account has been deactivated. Contact your manager.");
+        return;
+      }
       profile = prof;
       teamId = prof.team_id;
       regionId = prof.region_id;
@@ -227,21 +233,6 @@
         teamMembers = membersRes.data || [];
         accounts = accountsRes.data || [];
 
-        if (profile.role === "admin") {
-          const [orgTeamsRes, orgProfilesRes] = await Promise.all([
-            sb.from("teams").select("*").order("created_at", { ascending: true }),
-            sb.from("profiles").select("*"),
-          ]);
-          orgTeams = orgTeamsRes.data || [];
-          orgProfiles = orgProfilesRes.data || [];
-
-          const codelessTeams = orgTeams.filter((t) => !t.short_code);
-          for (const t of codelessTeams) {
-            const newCode = generateShortCode();
-            const { error: codeErr } = await sb.from("teams").update({ short_code: newCode }).eq("id", t.id);
-            if (!codeErr) t.short_code = newCode;
-          }
-        }
       }
       saveCache();
     } catch (err) {
@@ -1127,7 +1118,6 @@
   }
 
   function renderRecruits() {
-    const isAdmin = profile.role === "admin";
     const rows = teamMembers.map(statsForMember).sort((a, b) => b.revenue - a.revenue);
 
     return `
@@ -1135,18 +1125,6 @@
         <div class="section-title">
           <div><h2>Recruits</h2><span>${rows.length} on your team</span></div>
         </div>
-        <section class="card stack">
-          <div class="section-title"><h3>Invite a Recruit</h3><span>Share your Team Code</span></div>
-          <div class="team-id-box">
-            <div class="team-code-big">${escapeHtml(teamShortCode || "—")}</div>
-            <div class="copy-row">
-              <input id="recruitTeamIdDisplay" value="${escapeAttr(teamShortCode)}" readonly />
-              <button id="recruitCopyTeamId" class="secondary" type="button">Copy</button>
-              <button id="recruitShareTeamId" class="primary" type="button">Share</button>
-            </div>
-          </div>
-          <p class="muted">Have them tap "Join existing team" on the sign-in screen and paste this ID.</p>
-        </section>
         <section class="card stack">
           <div class="section-title"><h3>Roster</h3><span>Sorted by revenue</span></div>
           ${rows.length ? rows.map((r) => `
@@ -1162,43 +1140,8 @@
                 <span>${money(r.revenue)}</span>
               </div>
               <small>Joined ${new Date(r.created_at).toLocaleDateString()}${r.recruited_by_name ? " · Recruited by " + escapeHtml(r.recruited_by_name) : ""}</small>
-            </article>`).join("") : empty("No recruits yet. Share your Team Code to get started.")}
+            </article>`).join("") : empty("No recruits yet. New people are added through the CORE admin app.")}
         </section>
-        ${isAdmin ? renderOrgTeamManagement() : ""}
-      </section>`;
-  }
-
-  // Org-wide team management: only the owner (admin) sees this. Lets them
-  // spin up new teams and move any recruit into a different one.
-  function renderOrgTeamManagement() {
-    const teamsById = Object.fromEntries(orgTeams.map((t) => [t.id, t]));
-    return `
-      <section class="card stack">
-        <div class="section-title"><h3>Your Teams</h3><span>${orgTeams.length} total</span></div>
-        ${orgTeams.map((t) => {
-          const count = orgProfiles.filter((p) => p.team_id === t.id).length;
-          return `<div class="progress-row">
-            <div class="row-head"><b>${escapeHtml(t.name)}</b><span>${count} member${count === 1 ? "" : "s"}</span></div>
-            <small>Code: ${escapeHtml(t.short_code || "—")}</small>
-          </div>`;
-        }).join("")}
-        <div class="form-grid">
-          <label>New team name <input id="newTeamName" placeholder="Desert Hawks" /></label>
-          <button id="createTeam" class="primary" type="button">Create Team</button>
-        </div>
-      </section>
-      <section class="card stack">
-        <div class="section-title"><h3>Move Recruits Between Teams</h3><span>${orgProfiles.length} people org-wide</span></div>
-        ${orgProfiles.filter((p) => p.role !== "admin").map((p) => `
-          <div class="user-row">
-            <div class="record-top">
-              <strong>${escapeHtml(p.name)}</strong>
-              <select class="role-select" data-set-role="${p.id}">${ROLE_OPTIONS.map((r) => `<option value="${r}" ${p.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select>
-            </div>
-            <select class="role-select" data-set-team="${p.id}">
-              ${orgTeams.map((t) => `<option value="${t.id}" ${p.team_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("")}
-            </select>
-          </div>`).join("")}
       </section>`;
   }
 
@@ -1758,13 +1701,6 @@
     });
     bind("#shareTeamId", "click", () => shareTeamCode());
 
-    document.querySelectorAll("[data-set-role]").forEach((sel) => {
-      sel.addEventListener("change", () => setMemberRole(sel.dataset.setRole, sel.value));
-    });
-    document.querySelectorAll("[data-set-team]").forEach((sel) => {
-      sel.addEventListener("change", () => setMemberTeam(sel.dataset.setTeam, sel.value));
-    });
-    bind("#createTeam", "click", createNewTeam);
     document.querySelectorAll("[data-reset-password]").forEach((btn) => {
       btn.addEventListener("click", () => sendPasswordReset(btn.dataset.resetPassword, btn));
     });
@@ -1774,11 +1710,6 @@
     document.querySelectorAll("[data-cal-day]").forEach((btn) => {
       btn.addEventListener("click", () => { calendarSelectedDay = btn.dataset.calDay; render(); });
     });
-    bind("#recruitCopyTeamId", "click", () => {
-      const input = document.querySelector("#recruitTeamIdDisplay");
-      if (input) { navigator.clipboard.writeText(input.value).catch(() => {}); }
-    });
-    bind("#recruitShareTeamId", "click", () => shareTeamCode());
   }
 
   function shareTeamCode() {
@@ -1995,35 +1926,6 @@
     const acc = accounts.find((a) => a.id === id);
     if (acc) acc.status = "cancelled";
     saveCache();
-    render();
-  }
-
-  // Only an admin can change a member's role; this persists to Supabase.
-  async function setMemberRole(memberId, newRole) {
-    const member = teamMembers.find((m) => m.id === memberId);
-    if (member) member.role = newRole;
-    const orgMember = orgProfiles.find((m) => m.id === memberId);
-    if (orgMember) orgMember.role = newRole;
-    try { await sb.from("profiles").update({ role: newRole }).eq("id", memberId); } catch (e) { console.error(e); }
-    saveCache();
-    render();
-  }
-
-  // Admin-only: move a recruit into a different team.
-  async function setMemberTeam(memberId, newTeamId) {
-    const orgMember = orgProfiles.find((m) => m.id === memberId);
-    if (orgMember) orgMember.team_id = newTeamId;
-    try { await sb.from("profiles").update({ team_id: newTeamId }).eq("id", memberId); } catch (e) { console.error(e); }
-    render();
-  }
-
-  // Admin-only: spin up a new team with its own shareable code.
-  async function createNewTeam() {
-    const name = val("#newTeamName").trim();
-    if (!name) return;
-    const { data, error } = await sb.from("teams").insert({ name, short_code: generateShortCode() }).select().single();
-    if (error) { console.error(error); return; }
-    orgTeams.push(data);
     render();
   }
 
@@ -2441,9 +2343,7 @@
       <div class="user-row">
         <div class="record-top">
           <strong>${escapeHtml(member.name)}${isSelf ? " (you)" : ""}</strong>
-          ${isAdmin && !isSelf && member.role !== "admin"
-            ? `<select class="role-select" data-set-role="${member.id}">${ROLE_OPTIONS.map((r) => `<option value="${r}" ${member.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select>`
-            : `<span class="pill">${escapeHtml(ROLE_LABELS[member.role] || member.role)}</span>`}
+          <span class="pill">${escapeHtml(ROLE_LABELS[member.role] || member.role)}</span>
         </div>
         <small>Joined ${new Date(member.created_at).toLocaleDateString()}${member.recruited_by_name ? " · Recruited by " + escapeHtml(member.recruited_by_name) : ""}</small>
         ${member.phone || member.address ? `<small>${[member.phone, member.address].filter(Boolean).map(escapeHtml).join(" · ")}</small>` : ""}

@@ -995,13 +995,6 @@ label {
   font-weight: 600;
 }
 
-.role-select {
-  width: auto;
-  min-width: 110px;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 700;
-}
 
 /* ════ Calendar Tab ════ */
 .cal-header {
