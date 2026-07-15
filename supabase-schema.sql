@@ -278,3 +278,71 @@ create policy "Managers update team profiles" on profiles for update
 drop policy if exists "Regionals update region profiles" on profiles;
 create policy "Regionals update region profiles" on profiles for update
   using (my_role() = 'regional' and region_id = (select region_id from profiles where id = auth.uid()));
+
+-- ════════════════════════════════════════════════════════════════
+--  RECRUITING PIPELINE APP
+-- ════════════════════════════════════════════════════════════════
+-- Editable pipeline configuration: kind='stage' are the board columns,
+-- kind='flag' are the extenuating-circumstance tags. Org-wide, admin-managed.
+create table if not exists pipeline_stages (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  kind text not null default 'stage' check (kind in ('stage', 'flag')),
+  position int not null default 0,
+  is_final boolean default false,
+  created_at timestamptz default now()
+);
+
+create table if not exists candidates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text default '',
+  email text default '',
+  source text default '',
+  notes text default '',
+  stage_id uuid references pipeline_stages(id),
+  flag_id uuid references pipeline_stages(id),
+  recruiter_id uuid references profiles(id),
+  team_id uuid references teams(id),
+  owner_id uuid references profiles(id),
+  follow_up_date date,
+  hired boolean default false,
+  hired_profile_id uuid references profiles(id),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table pipeline_stages enable row level security;
+alter table candidates enable row level security;
+
+-- Everyone signed in can see the pipeline configuration; only admin edits it.
+drop policy if exists "Auth read stages" on pipeline_stages;
+create policy "Auth read stages" on pipeline_stages for select using (auth.uid() is not null);
+drop policy if exists "Admin writes stages" on pipeline_stages;
+create policy "Admin writes stages" on pipeline_stages for all using (is_admin()) with check (is_admin());
+
+-- Candidates are role-scoped: reps see their own, managers/regionals their
+-- team, admin sees all. Same rule governs read and write.
+drop policy if exists "Scoped read candidates" on candidates;
+create policy "Scoped read candidates" on candidates for select using (
+  is_admin()
+  or owner_id = auth.uid()
+  or recruiter_id = auth.uid()
+  or (my_role() in ('manager', 'regional') and team_id = my_team_id())
+);
+drop policy if exists "Insert own candidates" on candidates;
+create policy "Insert own candidates" on candidates for insert with check (
+  auth.uid() is not null and (owner_id = auth.uid() or is_admin())
+);
+drop policy if exists "Scoped update candidates" on candidates;
+create policy "Scoped update candidates" on candidates for update using (
+  is_admin()
+  or owner_id = auth.uid()
+  or (my_role() in ('manager', 'regional') and team_id = my_team_id())
+);
+drop policy if exists "Scoped delete candidates" on candidates;
+create policy "Scoped delete candidates" on candidates for delete using (
+  is_admin()
+  or owner_id = auth.uid()
+  or (my_role() in ('manager', 'regional') and team_id = my_team_id())
+);
