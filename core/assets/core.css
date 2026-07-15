@@ -264,3 +264,17 @@ table.day-table td:last-child, table.day-table th:last-child { text-align: right
 .track-fill { height: 100%; background: var(--core-blue); border-radius: 999px; transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
 
 .divider { border: none; border-top: 1px solid var(--line); margin: 6px 0; }
+
+.custom-range {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+}
+.custom-range label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: var(--slate); flex: 1; min-width: 130px; }
+.custom-range button { flex: 0 0 auto; }

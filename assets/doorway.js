@@ -91,6 +91,9 @@
   let authMode = "login";
   let authError = "";
   let onboardingStep = 0;
+  // First-login flow: new users (created in CORE with a temp password) must
+  // set their own password before the tutorial. Tracks this session only.
+  let passwordSet = false;
   // Preserves what the user typed on the auth screen across re-renders
   // (e.g. after a validation error) - only password fields get wiped.
   let authDraft = { teamId: "", recruiter: "", name: "", birthday: "", phone: "", address: "", email: "" };
@@ -359,12 +362,7 @@
               ${isLogin ? "Sign In" : "Join Team"}
             </button>
             <div class="auth-links">
-              ${isLogin ? `
-                <button class="ghost" type="button" data-auth-mode="join">Join existing team</button>
-                <button class="ghost" type="button" id="forgotPassword">Forgot password?</button>
-              ` : `
-                <button class="ghost" type="button" data-auth-mode="login">Back to sign in</button>
-              `}
+              <button class="ghost" type="button" id="forgotPassword">Forgot password?</button>
             </div>
           </div>
         </section>
@@ -483,7 +481,7 @@
             <span>${item.label}</span>
           </button>`).join("")}
       </nav>
-      ${profile.needs_onboarding ? renderOnboarding() : ""}`;
+      ${profile.needs_onboarding ? (passwordSet ? renderOnboarding() : renderSetPassword()) : ""}`;
 
     document.querySelectorAll("[data-tab]").forEach((btn) => {
       btn.addEventListener("click", () => go(btn.dataset.tab));
@@ -491,6 +489,7 @@
     bindCommonEvents();
     scrollActiveNavIntoView();
     bindOnboardingEvents();
+    bindSetPasswordEvents();
   }
 
   // Re-rendering rebuilds the nav bar from scratch, which would otherwise
@@ -507,6 +506,51 @@
     { title: "Never miss a callback", body: "Set a callback timer and it'll alert you when it's time to go back. Check Calendar to see them by day." },
     { title: "Watch your goals", body: "Dashboard shows your progress against today's goals, live, as you knock." },
   ];
+
+  // Shown once, on first login, before the tutorial. Replaces the temporary
+  // password the admin generated in CORE with one the user chooses.
+  function renderSetPassword() {
+    return `
+      <div class="onboarding-overlay">
+        <div class="onboarding-card">
+          <h2>Set your password</h2>
+          <p>Welcome! Create a password you'll use to sign in from now on. This replaces the temporary one you were given.</p>
+          ${passwordFieldHtml("setPw1", "New password", "new-password")}
+          ${passwordFieldHtml("setPw2", "Confirm password", "new-password")}
+          <p id="setPwError" class="error"></p>
+          <button id="setPwSubmit" class="primary" type="button">Save & Continue</button>
+        </div>
+      </div>`;
+  }
+
+  function bindSetPasswordEvents() {
+    document.querySelectorAll("[data-toggle-pw]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const input = document.querySelector("#" + btn.dataset.togglePw);
+        if (!input) return;
+        input.type = input.type === "password" ? "text" : "password";
+      });
+    });
+    bind("#setPwSubmit", "click", submitNewPassword);
+  }
+
+  async function submitNewPassword() {
+    const pw1 = val("#setPw1");
+    const pw2 = val("#setPw2");
+    const errEl = document.querySelector("#setPwError");
+    const setErr = (m) => { if (errEl) errEl.textContent = m; };
+    if (pw1.length < 6) return setErr("Password must be at least 6 characters.");
+    if (pw1 !== pw2) return setErr("Passwords don't match.");
+    const btn = document.querySelector("#setPwSubmit");
+    if (btn) { btn.disabled = true; btn.textContent = "Saving..."; }
+    const { error } = await sb.auth.updateUser({ password: pw1 });
+    if (error) {
+      if (btn) { btn.disabled = false; btn.textContent = "Save & Continue"; }
+      return setErr(error.message || "Couldn't update password.");
+    }
+    passwordSet = true;
+    render();
+  }
 
   function renderOnboarding() {
     const step = ONBOARDING_STEPS[onboardingStep];

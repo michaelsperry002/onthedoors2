@@ -171,6 +171,8 @@
               async signOut() { return {}; },
               async signInWithPassword() { return { data: { session: { user: { id: "me" } } }, error: null }; },
               async signUp() { return { data: { user: { id: "me" }, session: { user: { id: "me" } } }, error: null }; },
+              async updateUser() { return { data: { user: { id: "me" } }, error: null }; },
+              async resetPasswordForEmail() { return { error: null }; },
             },
             from(table) { return makeBuilder(table); },
           };

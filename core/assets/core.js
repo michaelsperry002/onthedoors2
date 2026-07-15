@@ -31,7 +31,9 @@
   let viewPersonId = null; // person drill-down
   let newAccountResult = null; // { name, email, tempPass }
   let flash = ""; // one-shot success message
-  let dashRange = "30"; // "7" | "30" | "90" | "all"
+  let dashRange = "30"; // "7" | "30" | "90" | "all" | "custom"
+  let dashFrom = "";     // custom range start (yyyy-mm-dd)
+  let dashTo = "";       // custom range end (yyyy-mm-dd)
 
   const appRoot = () => document.getElementById("app");
   const $ = (sel) => document.querySelector(sel);
@@ -40,7 +42,7 @@
 
   const ROLE_OPTIONS = ["rep", "manager", "regional"];
   const ROLE_LABELS = { rep: "Rep", manager: "Manager", regional: "Regional", admin: "Owner" };
-  const RANGES = [["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["all", "All time"]];
+  const RANGES = [["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["all", "All time"], ["custom", "Custom"]];
 
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -55,7 +57,21 @@
   function logFetchCutoff() { const d = new Date(); d.setDate(d.getDate() - LOG_FETCH_WINDOW_DAYS); return dkey(d); }
   function sinceKeyFor(range) { if (range === "all") return null; const d = new Date(); d.setDate(d.getDate() - Number(range)); return dkey(d); }
   function weekAgoKey() { const d = new Date(); d.setDate(d.getDate() - 7); return dkey(d); }
-  function rangeLabel(range) { return range === "all" ? "all time" : `last ${range} days`; }
+  function rangeLabel(range) {
+    if (range === "all") return "all time";
+    if (range === "custom") return (dashFrom && dashTo) ? `${dashFrom} → ${dashTo}` : "pick dates";
+    return `last ${range} days`;
+  }
+  // Rows for the active dashboard range.
+  function rangeRows() {
+    if (dashRange === "custom") {
+      if (!dashFrom || !dashTo) return [];
+      return logs.filter((l) => l.date >= dashFrom && l.date <= dashTo);
+    }
+    const since = sinceKeyFor(dashRange);
+    return since ? logs.filter((l) => l.date >= since) : logs;
+  }
+  function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
 
   function generateShortCode() {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -141,9 +157,16 @@
       (!x.recruited_by && x.recruited_by_name && x.recruited_by_name === p.name)));
   }
 
-  // Build a daily (or monthly for "all") time series from a set of log rows.
+  // Build a daily (or monthly for large spans) time series from log rows.
   function seriesFor(rows, range) {
-    const labels = [], doors = [], revenue = [];
+    const labels = [], doors = [], sales = [], revenue = [];
+    const pushDay = (key) => {
+      const dr = rows.filter((r) => r.date === key);
+      labels.push(key);
+      doors.push(dr.length);
+      sales.push(dr.filter((x) => x.outcome === "sale").length);
+      revenue.push(dr.reduce((s, x) => s + Number(x.contract_value || 0), 0));
+    };
     if (range === "all") {
       const now = new Date();
       for (let m = 11; m >= 0; m--) {
@@ -152,20 +175,42 @@
         labels.push(d.toLocaleString(undefined, { month: "short" }));
         const mr = rows.filter((r) => r.date && r.date.slice(0, 7) === key);
         doors.push(mr.length);
+        sales.push(mr.filter((x) => x.outcome === "sale").length);
         revenue.push(mr.reduce((s, x) => s + Number(x.contract_value || 0), 0));
+      }
+    } else if (range === "custom") {
+      if (dashFrom && dashTo) {
+        const span = Math.max(0, daysBetween(dashFrom, dashTo));
+        // Long custom spans bucket by month to stay readable.
+        if (span > 92) {
+          const start = new Date(dashFrom);
+          const end = new Date(dashTo);
+          let d = new Date(start.getFullYear(), start.getMonth(), 1);
+          while (d <= end) {
+            const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+            labels.push(d.toLocaleString(undefined, { month: "short", year: "2-digit" }));
+            const mr = rows.filter((r) => r.date && r.date.slice(0, 7) === key);
+            doors.push(mr.length);
+            sales.push(mr.filter((x) => x.outcome === "sale").length);
+            revenue.push(mr.reduce((s, x) => s + Number(x.contract_value || 0), 0));
+            d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+          }
+        } else {
+          const start = new Date(dashFrom);
+          for (let i = 0; i <= span; i++) {
+            const d = new Date(start); d.setDate(d.getDate() + i);
+            pushDay(dkey(d));
+          }
+        }
       }
     } else {
       const n = Number(range), today = new Date();
       for (let i = n - 1; i >= 0; i--) {
         const d = new Date(today); d.setDate(d.getDate() - i);
-        const key = dkey(d);
-        labels.push(key);
-        const dr = rows.filter((r) => r.date === key);
-        doors.push(dr.length);
-        revenue.push(dr.reduce((s, x) => s + Number(x.contract_value || 0), 0));
+        pushDay(dkey(d));
       }
     }
-    return { labels, doors, revenue };
+    return { labels, doors, sales, revenue };
   }
   function shortLabel(l) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(l)) { const p = l.split("-"); return Number(p[1]) + "/" + Number(p[2]); }
@@ -244,8 +289,8 @@
   // ── Dashboard ───────────────────────────────────────────────────
   function renderDashboard() {
     const range = dashRange;
-    const since = sinceKeyFor(range);
-    const rows = since ? logs.filter((l) => l.date >= since) : logs;
+    const since = range === "custom" ? (dashFrom || null) : sinceKeyFor(range);
+    const rows = rangeRows();
     const st = aggregate(rows);
     const active = people.filter((p) => !p.disabled);
     const ser = seriesFor(rows, range);
@@ -282,6 +327,12 @@
       <div class="range-chips" id="rangeChips">
         ${RANGES.map(([v, l]) => `<button data-range="${v}" class="${range === v ? "active" : ""}" type="button">${l}</button>`).join("")}
       </div>
+      ${range === "custom" ? `
+      <div class="custom-range">
+        <label>From <input id="dashFrom" type="date" value="${escapeAttr(dashFrom)}" /></label>
+        <label>To <input id="dashTo" type="date" value="${escapeAttr(dashTo)}" /></label>
+        <button id="applyCustom" class="blue" type="button">Apply</button>
+      </div>` : ""}
 
       <div class="stat-grid">
         <div class="stat"><small>Doors</small><strong>${st.doors.toLocaleString()}</strong><span>${rangeLabel(range)}</span></div>
@@ -299,6 +350,10 @@
       <section class="card stack">
         <div class="section-title"><h3>Revenue over time</h3><span>${rangeLabel(range)}</span></div>
         ${barsHtml(ser.revenue, ser.labels, { color: "var(--good)", fmt: (v) => money(v) })}
+      </section>
+      <section class="card stack">
+        <div class="section-title"><h3>Sales over time</h3><span>${rangeLabel(range)}</span></div>
+        ${barsHtml(ser.sales, ser.labels, { color: "var(--slate)" })}
       </section>
 
       <section class="card stack">
@@ -518,7 +573,19 @@
   function bindTabEvents() {
     // dashboard
     document.querySelectorAll("[data-range]").forEach((b) =>
-      b.addEventListener("click", () => { dashRange = b.dataset.range; render(); }));
+      b.addEventListener("click", () => {
+        dashRange = b.dataset.range;
+        if (dashRange === "custom" && !dashTo) {
+          dashTo = dkey(new Date());
+          const f = new Date(); f.setDate(f.getDate() - 30); dashFrom = dkey(f);
+        }
+        render();
+      }));
+    bind("#applyCustom", "click", () => {
+      dashFrom = val("#dashFrom");
+      dashTo = val("#dashTo");
+      render();
+    });
     // teams
     bind("#createTeam", "click", createTeam);
     document.querySelectorAll("[data-rename-team]").forEach((b) =>
