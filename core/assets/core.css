@@ -210,3 +210,57 @@ table.day-table td:last-child, table.day-table th:last-child { text-align: right
 .row-head span { color: var(--muted); font-size: 13px; }
 
 .disabled-person { opacity: 0.5; }
+
+/* range filter chips */
+.range-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: -4px 0 2px; }
+.range-chips button {
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.range-chips button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+
+/* bar charts */
+.chart-wrap { overflow-x: auto; }
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 120px;
+  min-width: 100%;
+  padding-top: 6px;
+}
+.bar-col {
+  flex: 1 0 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 5px;
+  min-width: 0;
+}
+.bar-fill {
+  width: 72%;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bar-col span {
+  font-size: 9px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* horizontal progress track (team revenue) */
+.track { height: 7px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+.track-fill { height: 100%; background: var(--core-blue); border-radius: 999px; transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+
+.divider { border: none; border-top: 1px solid var(--line); margin: 6px 0; }

@@ -247,3 +247,10 @@ create policy "Admin inserts any team_settings" on team_settings for insert with
 create policy "Admin updates any team_settings" on team_settings for update using (is_admin());
 create policy "Admin updates all accounts" on accounts for update using (is_admin());
 create policy "Admin deletes teams" on teams for delete using (is_admin());
+
+-- ── Migration: CORE recruiting + people management ──
+-- recruited_by links a person to their direct recruiter (a profile).
+-- The delete policy lets the admin remove a person from CORE's People tab.
+alter table profiles add column if not exists recruited_by uuid references profiles(id);
+drop policy if exists "Admin deletes profiles" on profiles;
+create policy "Admin deletes profiles" on profiles for delete using (is_admin());
