@@ -1,13 +1,15 @@
 {
+  "id": "/recruiting/",
   "name": "CORE Recruiting",
   "short_name": "Recruiting",
   "description": "CORE recruiting pipeline.",
   "start_url": "/recruiting/",
+  "scope": "/recruiting/",
   "display": "standalone",
   "background_color": "#f1f3f5",
   "theme_color": "#14213D",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/recruiting/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/recruiting/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

@@ -306,6 +306,7 @@ create table if not exists candidates (
   team_id uuid references teams(id),
   owner_id uuid references profiles(id),
   follow_up_date date,
+  appt_at timestamptz,
   hired boolean default false,
   hired_profile_id uuid references profiles(id),
   created_at timestamptz default now(),

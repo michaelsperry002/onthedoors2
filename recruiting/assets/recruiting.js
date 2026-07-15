@@ -29,6 +29,16 @@
   const nameOf = (id) => (people.find((p) => p.id === id) || {}).name || "—";
   const teamName = (id) => (teams.find((t) => t.id === id) || {}).name || "—";
   const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const pad2 = (n) => String(n).padStart(2, "0");
+  // datetime-local <-> ISO
+  function toLocalInput(iso) { if (!iso) return ""; const d = new Date(iso); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+  function fromLocalInput(v) { return v ? new Date(v).toISOString() : null; }
+  function fmtWhen(iso) { const d = new Date(iso); return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
+  function fmtTime(iso) { return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+  const isMeetingStage = (st) => st && /meeting set/i.test(st.name);
+  const stageOf = (c) => stages.find((s) => s.id === c.stage_id);
+  const stageNamed = (re) => stages.find((s) => re.test(s.name));
+  const flagNamed = (re) => flags.find((f) => re.test(f.name));
 
   // ── Init / auth ─────────────────────────────────────────────────
   async function init() {
@@ -64,6 +74,7 @@
     people = pplRes.data || [];
     teams = teamRes.data || [];
     if (!stages.length && perms.isAdmin) await seedDefaults();
+    if (NOTIF_OK() && Notification.permission === "granted") startReminderLoop();
   }
 
   async function seedDefaults() {
@@ -129,11 +140,12 @@
   }
 
   function renderApp() {
-    const tabs = [["board", "Board"], ["list", "List"]];
+    const tabs = [["board", "Board"], ["list", "List"], ["calendar", "Calendar"]];
     if (perms.canManageStages) tabs.push(["settings", "Settings"]);
     let body = "";
     if (activeTab === "board") body = renderBoard();
     else if (activeTab === "list") body = renderList();
+    else if (activeTab === "calendar") body = renderCalendar();
     else if (activeTab === "settings") body = renderSettings();
 
     appRoot().innerHTML = `
@@ -143,13 +155,14 @@
       </header>
       <nav class="tabs">${tabs.map(([id, l]) => `<button data-tab="${id}" class="${activeTab === id ? "active" : ""}" type="button">${l}</button>`).join("")}</nav>
       <main class="wrap">${body}</main>
-      ${activeTab !== "settings" ? `<button class="fab" id="addCandidate" type="button" aria-label="Add candidate">+</button>` : ""}`;
+      ${activeTab !== "settings" && activeTab !== "calendar" ? `<button class="fab" id="addCandidate" type="button" aria-label="Add candidate"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>` : ""}`;
 
     bind("#signOut", "click", async () => { await sb.auth.signOut(); session = null; profile = null; render(); });
     document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { activeTab = b.dataset.tab; render(); }));
     bind("#addCandidate", "click", () => openCandidateModal(null));
     bindBoardEvents();
     bindListEvents();
+    bindCalendarEvents();
     bindSettingsEvents();
   }
 
@@ -172,6 +185,7 @@
               <div class="meta">
                 <span>${esc(nameOf(c.recruiter_id))}</span>
                 ${c.phone ? `<span>${esc(c.phone)}</span>` : ""}
+                ${c.appt_at ? `<span class="tag appt">📅 ${esc(fmtWhen(c.appt_at))}</span>` : ""}
                 ${overdue(c) ? `<span class="tag due">Due ${esc(c.follow_up_date)}</span>` : c.follow_up_date ? `<span>↺ ${esc(c.follow_up_date)}</span>` : ""}
               </div>
               <select class="move" data-move="${c.id}">${stageOpts(c.stage_id)}</select>
@@ -225,6 +239,8 @@
     c.stage_id = stageId; c.hired = hired; c.updated_at = new Date().toISOString();
     const { error } = await sb.from("candidates").update({ stage_id: stageId, hired, updated_at: c.updated_at }).eq("id", id);
     if (error) alert("Couldn't move: " + error.message);
+    // Moving into a "Meeting Set" stage without a time? Open the card to set one.
+    if (isMeetingStage(stage) && !c.appt_at) { openCandidateModal(id); return; }
     render();
   }
 
@@ -298,6 +314,7 @@
           <label>Recruiter <select id="mRecruiter" ${dis}>${recOpts}</select></label>
           <label>Team <select id="mTeam" ${dis}>${teamOpts}</select></label>
           <label>Follow-up date <input id="mFollow" type="date" value="${esc(c.follow_up_date || "")}" ${dis} /></label>
+          <label>Appointment <input id="mAppt" type="datetime-local" value="${esc(toLocalInput(c.appt_at))}" ${dis} /></label>
         </div>
         <label>Notes <textarea id="mNotes" ${dis}>${esc(c.notes || "")}</textarea></label>
         ${!editable ? `<p class="muted">View only — you don't have permission to edit this candidate.</p>` : ""}
@@ -335,6 +352,7 @@
       recruiter_id: val("#mRecruiter") || profile.id,
       team_id: val("#mTeam") || profile.team_id,
       follow_up_date: val("#mFollow") || null,
+      appt_at: fromLocalInput(val("#mAppt")),
       notes: val("#mNotes").trim(),
       hired: !!(stage && stage.is_final),
       updated_at: new Date().toISOString(),
@@ -361,6 +379,115 @@
     candidates = candidates.filter((c) => c.id !== id);
     closeModal();
     render();
+  }
+
+  // ── Calendar + reminders ────────────────────────────────────────
+  const NOTIF_OK = () => typeof Notification !== "undefined";
+  function notifState() { return NOTIF_OK() ? Notification.permission : "unsupported"; }
+  async function requestNotif() {
+    if (!NOTIF_OK()) { alert("Notifications aren't supported on this browser."); return; }
+    await Notification.requestPermission();
+    startReminderLoop();
+    render();
+  }
+  function fireNotif(title, body) {
+    if (!NOTIF_OK() || Notification.permission !== "granted") return;
+    try { new Notification(title, { body, icon: "icon-192.png" }); } catch (e) { /* ignore */ }
+  }
+  const firedKey = "rec.fired.v1";
+  function firedSet() { try { return new Set(JSON.parse(localStorage.getItem(firedKey) || "[]")); } catch { return new Set(); } }
+  function markFired(k) { const s = firedSet(); s.add(k); localStorage.setItem(firedKey, JSON.stringify([...s].slice(-500))); }
+
+  // The reach-out buckets: Interested-stage candidates + anything tagged Stagnant.
+  function reachOutList() {
+    const interested = stageNamed(/interested/i);
+    const stagnant = flagNamed(/stagnant/i);
+    const seen = new Set();
+    return visibleCandidates().filter((c) => {
+      if (c.hired) return false;
+      const hit = (interested && c.stage_id === interested.id) || (stagnant && c.flag_id === stagnant.id);
+      if (hit && !seen.has(c.id)) { seen.add(c.id); return true; }
+      return false;
+    });
+  }
+  function upcomingAppts() {
+    const now = Date.now();
+    return visibleCandidates().filter((c) => c.appt_at && new Date(c.appt_at).getTime() > now - 3600000)
+      .sort((a, b) => new Date(a.appt_at) - new Date(b.appt_at));
+  }
+
+  let notifTimer = null;
+  function startReminderLoop() { if (notifTimer) return; tick(); notifTimer = setInterval(tick, 60000); }
+  function tick() {
+    if (!profile) return;
+    const now = Date.now();
+    const fired = firedSet();
+    const win = 30 * 60000; // fire within 30 min of the target moment
+    upcomingAppts().forEach((c) => {
+      const t = new Date(c.appt_at).getTime();
+      [["d", 86400000, "tomorrow"], ["h", 3600000, "in 1 hour"], ["t", 0, "now"]].forEach(([k, off, word]) => {
+        const target = t - off;
+        const key = `${c.id}:${k}:${t}`;
+        if (now >= target && now <= t + win && !fired.has(key)) {
+          fireNotif(`Appointment ${word}: ${c.name}`, `${fmtWhen(c.appt_at)}${c.phone ? " · " + c.phone : ""}`);
+          markFired(key);
+        }
+      });
+    });
+    // Daily reach-out nudge
+    const ro = reachOutList();
+    const dayKey = `reachout:${todayKey()}`;
+    if (ro.length && !fired.has(dayKey) && new Date().getHours() >= 9) {
+      fireNotif(`${ro.length} contact${ro.length === 1 ? "" : "s"} to reach out to`, "Text or call your Interested & Stagnant leads today.");
+      markFired(dayKey);
+    }
+  }
+
+  function renderCalendar() {
+    const perm = notifState();
+    const appts = upcomingAppts();
+    const byDay = {};
+    appts.forEach((c) => { const d = new Date(c.appt_at); const k = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; (byDay[k] = byDay[k] || []).push(c); });
+    const dayLabel = (k) => { const d = new Date(k + "T12:00:00"); const t = todayKey(); if (k === t) return "Today"; return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }); };
+    const ro = reachOutList();
+
+    return `
+      ${perm !== "granted" ? `
+        <section class="card">
+          <div class="section-title"><h2>Reminders</h2></div>
+          <p class="muted" style="margin:6px 0 10px">Turn on notifications to get reminded <b>1 day</b>, <b>1 hour</b>, and <b>at the time</b> of each appointment, plus a daily nudge to reach out to your Interested & Stagnant leads.</p>
+          <button class="blue" id="enableNotif" type="button">${perm === "unsupported" ? "Notifications unavailable" : "Enable reminders"}</button>
+        </section>` : `<section class="card"><div class="row-inline"><span class="tag final">🔔 Reminders on</span><span class="muted">1 day · 1 hour · at time of each appointment</span></div></section>`}
+
+      <section class="card">
+        <div class="section-title"><h2>Upcoming Appointments</h2><span>${appts.length}</span></div>
+        ${Object.keys(byDay).length ? Object.entries(byDay).map(([k, list]) => `
+          <div style="margin-top:8px"><b style="font-size:13px">${esc(dayLabel(k))}</b></div>
+          ${list.map((c) => `
+            <div class="list-row" data-open="${c.id}">
+              <div class="top"><strong>${esc(c.name)}</strong><span class="tag appt">${esc(fmtTime(c.appt_at))}</span></div>
+              <div class="meta muted">${esc((stageOf(c) || {}).name || "")}${c.phone ? " · " + esc(c.phone) : ""} · ${esc(nameOf(c.recruiter_id))}</div>
+            </div>`).join("")}
+        `).join("") : `<p class="empty">No appointments scheduled. Move a candidate to a "Meeting Set" stage to add one.</p>`}
+      </section>
+
+      <section class="card">
+        <div class="section-title"><h2>Reach Out</h2><span>${ro.length}</span></div>
+        <p class="muted" style="margin:2px 0 8px">Interested & Stagnant leads to text or call.</p>
+        ${ro.length ? ro.map((c) => `
+          <div class="list-row">
+            <div class="top"><strong>${esc(c.name)}</strong><span class="pill">${esc((stageOf(c) || {}).name || "")}${c.flag_id ? " · " + esc((flags.find((f) => f.id === c.flag_id) || {}).name || "") : ""}</span></div>
+            <div class="row-inline" style="margin-top:4px">
+              ${c.phone ? `<a class="tiny secondary" style="text-decoration:none;padding:5px 10px;border-radius:8px" href="tel:${esc(c.phone)}">Call</a><a class="tiny secondary" style="text-decoration:none;padding:5px 10px;border-radius:8px" href="sms:${esc(c.phone)}">Text</a>` : `<span class="muted">No phone on file</span>`}
+              <button class="tiny secondary" data-open="${c.id}" type="button">Open</button>
+            </div>
+          </div>`).join("") : `<p class="empty">No one to reach out to right now.</p>`}
+      </section>`;
+  }
+  function bindCalendarEvents() {
+    if (activeTab !== "calendar") return;
+    bind("#enableNotif", "click", requestNotif);
+    document.querySelectorAll("[data-open]").forEach((el) => el.addEventListener("click", () => openCandidateModal(el.dataset.open)));
   }
 
   // ── Settings: manage stages & flags (admin) ─────────────────────

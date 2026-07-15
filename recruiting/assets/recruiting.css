@@ -129,6 +129,8 @@ main.wrap { padding: 16px 14px 60px; display: grid; gap: 14px; }
 .tag.flag { background: rgba(217, 154, 27, 0.14); color: #a9760a; border: 1px solid rgba(217,154,27,0.35); }
 .tag.due { background: rgba(229, 72, 77, 0.12); color: var(--danger); }
 .tag.final { background: rgba(31, 157, 85, 0.14); color: var(--good); }
+.tag.appt { background: rgba(30, 79, 255, 0.1); color: var(--blue); border: 1px solid rgba(30,79,255,0.28); }
+.fab svg { display: block; }
 
 /* list view */
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); }
