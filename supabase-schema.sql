@@ -254,3 +254,27 @@ create policy "Admin deletes teams" on teams for delete using (is_admin());
 alter table profiles add column if not exists recruited_by uuid references profiles(id);
 drop policy if exists "Admin deletes profiles" on profiles;
 create policy "Admin deletes profiles" on profiles for delete using (is_admin());
+
+-- ── Migration: CORE multi-user (everyone views, edits gated by role) ──
+-- can_add lets a manager/regional be granted account-creation rights.
+alter table profiles add column if not exists can_add boolean default false;
+
+-- Any signed-in user may VIEW org-wide data in CORE (read-only).
+drop policy if exists "Auth read profiles" on profiles;
+create policy "Auth read profiles" on profiles for select using (auth.uid() is not null);
+drop policy if exists "Auth read logs" on logs;
+create policy "Auth read logs" on logs for select using (auth.uid() is not null);
+drop policy if exists "Auth read teams" on teams;
+create policy "Auth read teams" on teams for select using (auth.uid() is not null);
+drop policy if exists "Auth read sales" on sales;
+create policy "Auth read sales" on sales for select using (auth.uid() is not null);
+drop policy if exists "Auth read team_settings" on team_settings;
+create policy "Auth read team_settings" on team_settings for select using (auth.uid() is not null);
+
+-- Managers may edit profiles on their own team; regionals within their region.
+drop policy if exists "Managers update team profiles" on profiles;
+create policy "Managers update team profiles" on profiles for update
+  using (my_role() = 'manager' and team_id = my_team_id());
+drop policy if exists "Regionals update region profiles" on profiles;
+create policy "Regionals update region profiles" on profiles for update
+  using (my_role() = 'regional' and region_id = (select region_id from profiles where id = auth.uid()));

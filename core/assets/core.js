@@ -5,10 +5,6 @@
   const SUPABASE_URL = "https://tpzfmnyrqsqewgtkpxie.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_hgsd7UGGL2EjqVM875LzKA_fqjFgwbW";
 
-  // Only this account may ever use CORE. Enforced here AND by the
-  // role='admin' check + RLS policies in the database.
-  const ADMIN_EMAIL = "michaelsperry002@gmail.com";
-
   const sb = window.__CORE_MOCK_SB
     ? window.__CORE_MOCK_SB
     : window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -120,22 +116,48 @@
   }
 
   async function afterLogin() {
-    const email = (session.user.email || "").toLowerCase();
-    if (email !== ADMIN_EMAIL) {
+    const { data: prof } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
+    if (!prof) {
       await sb.auth.signOut();
       session = null;
-      authError = "This app is restricted to the organization owner.";
+      authError = "No CORE profile found for this account.";
       return;
     }
-    const { data: prof } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
-    if (!prof || prof.role !== "admin") {
+    if (prof.disabled) {
       await sb.auth.signOut();
       session = null;
-      authError = "This account does not have admin access.";
+      authError = "Your account has been deactivated.";
       return;
     }
     profile = prof;
+    computePerms();
     await loadAll();
+  }
+
+  // Capability model. Everyone can view; editing is gated by role, and
+  // the database's RLS policies enforce the same rules server-side.
+  let perms = {};
+  function computePerms() {
+    const r = profile.role;
+    const isAdmin = r === "admin";
+    const isManager = r === "manager" || r === "regional";
+    perms = {
+      isAdmin,
+      canEdit: isAdmin || isManager,           // can edit *some* people
+      canAdd: isAdmin || (isManager && !!profile.can_add),
+      canTeams: isAdmin,                        // create/rename/delete teams
+      canDelete: isAdmin,                       // permanently delete people
+      role: r,
+    };
+  }
+  // Can the current user edit THIS person? Admin: anyone. Manager: own team.
+  // Regional: own region. Reps: no one.
+  function canEditPerson(p) {
+    if (perms.isAdmin) return true;
+    if (p.role === "admin" || p.id === profile.id) return false;
+    if (profile.role === "manager") return p.team_id === profile.team_id;
+    if (profile.role === "regional") return !!profile.region_id && p.region_id === profile.region_id;
+    return false;
   }
 
   async function signIn() {
@@ -322,8 +344,8 @@
           <div class="brand">
             <img class="logo" src="favicon.svg" alt="CORE" />
             <small>CORE</small>
-            <h1>Admin Control Hub</h1>
-            <p class="muted">Owner access only.</p>
+            <h1>Control Hub</h1>
+            <p class="muted">Sign in with your CORE KPI login.</p>
           </div>
           ${authError ? `<p class="auth-error">${escapeHtml(authError)}</p>` : ""}
           <label>Email <input id="email" type="email" autocomplete="username" /></label>
@@ -346,7 +368,7 @@
     appRoot().innerHTML = `
       <header class="topbar">
         <div class="brand-row"><img src="favicon.svg" alt="" /><div><h1>CORE</h1></div></div>
-        <div class="row-inline"><small>${escapeHtml(profile.name)}</small><button id="signOut" type="button">Sign Out</button></div>
+        <div class="row-inline"><small>${escapeHtml(profile.name)} · ${escapeHtml(ROLE_LABELS[profile.role] || profile.role)}${perms.isAdmin ? "" : perms.canEdit ? "" : " · view only"}</small><button id="signOut" type="button">Sign Out</button></div>
       </header>
       <nav class="tabs">
         ${tabs.map(([id, label]) => `<button data-tab="${id}" class="${activeTab === id ? "active" : ""}" type="button">${label}</button>`).join("")}
@@ -647,24 +669,27 @@
   function renderTeams() {
     return `
       <div class="section-title"><h2>Teams</h2><span>${teams.length} total</span></div>
+      ${perms.canTeams ? `
       <section class="card stack">
         <div class="section-title"><h3>Create a Team</h3><span>gets its own join code</span></div>
         <div class="row-inline">
           <input id="newTeamName" placeholder="Team name, e.g. Desert Hawks" />
           <button id="createTeam" class="blue" type="button">Create</button>
         </div>
-      </section>
+      </section>` : ""}
       ${teams.map((t) => {
         const members = people.filter((p) => p.team_id === t.id);
+        const mstats = aggregate(logs.filter((l) => members.some((m) => m.id === l.user_id)));
         return `
         <section class="card stack">
           <div class="section-title"><h3>${escapeHtml(t.name)}</h3><span>${members.length} member${members.length === 1 ? "" : "s"}</span></div>
-          <div class="meta-row"><span>Join code: <b>${escapeHtml(t.short_code || "—")}</b></span></div>
+          <div class="meta-row"><span>Join code: <b>${escapeHtml(t.short_code || "—")}</b></span><span>${mstats.doors} doors</span><span>${money(mstats.revenue)}</span></div>
+          ${perms.canTeams ? `
           <div class="row-inline">
             <input data-rename-input="${t.id}" value="${escapeAttr(t.name)}" />
             <button class="secondary" data-rename-team="${t.id}" type="button">Rename</button>
           </div>
-          ${members.length ? "" : `<button class="danger" data-delete-team="${t.id}" type="button">Delete empty team</button>`}
+          ${members.length ? "" : `<button class="danger" data-delete-team="${t.id}" type="button">Delete empty team</button>`}` : ""}
         </section>`;
       }).join("")}`;
   }
@@ -684,6 +709,7 @@
     const rows = [...people].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return `
       <div class="section-title"><h2>People</h2><span>${people.length} org-wide</span></div>
+      ${perms.canAdd ? `
       <section class="card stack">
         <div class="section-title"><h3>Add a Person</h3><span>creates their account instantly</span></div>
         ${newAccountResult ? `
@@ -699,13 +725,13 @@
             <label>Full name <input id="npName" placeholder="Jane Doe" /></label>
             <label>Email <input id="npEmail" type="email" placeholder="jane@email.com" /></label>
             <label>Phone <input id="npPhone" placeholder="(555) 123-4567" /></label>
-            <label>Team <select id="npTeam">${teams.map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("")}</select></label>
+            <label>Team <select id="npTeam">${teams.filter((t) => perms.isAdmin || t.id === profile.team_id).map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("")}</select></label>
             <label>Role <select id="npRole">${ROLE_OPTIONS.map((r) => `<option value="${r}">${ROLE_LABELS[r]}</option>`).join("")}</select></label>
             <label>Direct recruit <select id="npRecruit">${recruitOptions(profile.id, null)}</select></label>
           </div>
           <button id="createPerson" class="blue" type="button">Create Account</button>
           <p class="muted" id="createPersonError" style="color:var(--danger)"></p>`}
-      </section>
+      </section>` : ""}
       <section class="card stack">
         <div class="section-title"><h3>Everyone</h3><span>tap a person for details</span></div>
         <div class="row-inline">
@@ -752,7 +778,6 @@
     const recruiterName = p.recruited_by
       ? (people.find((x) => x.id === p.recruited_by) || {}).name
       : p.recruited_by_name;
-    const isOwner = p.role === "admin";
 
     return `
       <button class="back-link" id="backToPeople" type="button">&larr; All people</button>
@@ -788,14 +813,7 @@
           </article>`).join("") : `<p class="empty">No recruits under this person yet.</p>`}
       </section>
 
-      ${isOwner ? `
-      <section class="card stack">
-        <div class="section-title"><h3>Profile</h3><span>owner account</span></div>
-        <div class="meta-row">
-          ${p.email ? `<span>${escapeHtml(p.email)}</span>` : ""}
-          ${p.phone ? `<span>${escapeHtml(p.phone)}</span>` : ""}
-        </div>
-      </section>` : `
+      ${canEditPerson(p) ? `
       <section class="card stack">
         <div class="section-title"><h3>Edit Person</h3><span>details & assignment</span></div>
         <div class="form-2col">
@@ -804,7 +822,7 @@
           <label>Phone <input id="pdPhone" value="${escapeAttr(p.phone || "")}" /></label>
           <label>Address <input id="pdAddress" value="${escapeAttr(p.address || "")}" /></label>
           <label>Role <select id="pdRole">${ROLE_OPTIONS.map((r) => `<option value="${r}" ${p.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select></label>
-          <label>Team <select id="pdTeam">${teams.map((t) => `<option value="${t.id}" ${p.team_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("")}</select></label>
+          <label>Team <select id="pdTeam" ${perms.isAdmin ? "" : "disabled"}>${teams.map((t) => `<option value="${t.id}" ${p.team_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("")}</select></label>
           <label>Direct recruit <select id="pdRecruit">${recruitOptions(p.recruited_by || "", p.id)}</select></label>
         </div>
         <div class="row-inline">
@@ -812,9 +830,19 @@
           ${p.email ? `<button id="pdReset" class="secondary" type="button">Send Password Reset</button>` : ""}
           <button id="pdToggle" class="${p.disabled ? "secondary" : "danger"}" type="button">${p.disabled ? "Reactivate" : "Deactivate"}</button>
         </div>
+        ${perms.canDelete ? `
         <hr class="divider" />
         <button id="pdDelete" class="danger" type="button">Delete Person Permanently</button>
-        <small class="muted">Deleting removes their profile from all apps. Their logged history stays in the database.</small>
+        <small class="muted">Deleting removes their profile from all apps. Their logged history stays in the database.</small>` : ""}
+      </section>` : `
+      <section class="card stack">
+        <div class="section-title"><h3>Profile</h3><span>view only</span></div>
+        <div class="meta-row">
+          ${p.email ? `<span>${escapeHtml(p.email)}</span>` : ""}
+          ${p.phone ? `<span>${escapeHtml(p.phone)}</span>` : ""}
+          ${p.address ? `<span>${escapeHtml(p.address)}</span>` : ""}
+        </div>
+        ${perms.isAdmin ? "" : `<small class="muted">You don't have permission to edit this person.</small>`}
       </section>`}`;
   }
 

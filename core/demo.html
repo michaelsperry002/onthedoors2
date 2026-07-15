@@ -9,13 +9,15 @@
     <script>
       // Mock Supabase client so the CORE app runs with fake data.
       (() => {
+        // ?as=admin|manager|rep|regional lets us preview each role.
+        const AS = new URLSearchParams(location.search).get("as") || "admin";
         const ADMIN_ID = "u-admin";
         const teams = [
           { id: "t1", name: "Desert Hawks", short_code: "HAWK22", created_at: "2025-01-01" },
           { id: "t2", name: "Valley Wolves", short_code: "WOLF88", created_at: "2025-03-01" },
         ];
         const profiles = [
-          { id: ADMIN_ID, team_id: "t1", role: "admin", name: "Michael Sperry", email: "michaelsperry002@gmail.com", phone: "(555) 000-0001", disabled: false, created_at: "2025-01-01" },
+          { id: ADMIN_ID, team_id: "t1", region_id: "r1", role: AS, can_add: AS === "manager", name: "Michael Sperry", email: "michaelsperry002@gmail.com", phone: "(555) 000-0001", disabled: false, created_at: "2025-01-01" },
           { id: "u1", team_id: "t1", role: "manager", name: "Sam Patel", email: "sam@x.com", phone: "(555) 111-2222", disabled: false, created_at: "2025-02-01", recruited_by: ADMIN_ID, recruited_by_name: "Michael Sperry" },
           { id: "u2", team_id: "t1", role: "rep", name: "Maria Lopez", email: "maria@x.com", disabled: false, created_at: "2025-02-15", recruited_by: "u1", recruited_by_name: "Sam Patel" },
           { id: "u3", team_id: "t2", role: "rep", name: "Tyler Nguyen", email: "tyler@x.com", disabled: false, created_at: "2025-04-01", recruited_by: "u1", recruited_by_name: "Sam Patel" },
