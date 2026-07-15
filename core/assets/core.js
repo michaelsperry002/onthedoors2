@@ -34,6 +34,12 @@
   let dashRange = "30"; // "7" | "30" | "90" | "all" | "custom"
   let dashFrom = "";     // custom range start (yyyy-mm-dd)
   let dashTo = "";       // custom range end (yyyy-mm-dd)
+  // KPIs tab (view-only analytics) has its own independent filters.
+  let kpiPersonId = null;
+  let kpiRange = "30";
+  let kpiFrom = "";
+  let kpiTo = "";
+  let kpiSort = "revenue"; // revenue | doors | closeRate | answerRate | perDay
 
   const appRoot = () => document.getElementById("app");
   const $ = (sel) => document.querySelector(sel);
@@ -57,21 +63,22 @@
   function logFetchCutoff() { const d = new Date(); d.setDate(d.getDate() - LOG_FETCH_WINDOW_DAYS); return dkey(d); }
   function sinceKeyFor(range) { if (range === "all") return null; const d = new Date(); d.setDate(d.getDate() - Number(range)); return dkey(d); }
   function weekAgoKey() { const d = new Date(); d.setDate(d.getDate() - 7); return dkey(d); }
-  function rangeLabel(range) {
+  function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+
+  // Generic range helpers — shared by the Dashboard and KPIs tabs.
+  function rangeLabelG(range, from, to) {
     if (range === "all") return "all time";
-    if (range === "custom") return (dashFrom && dashTo) ? `${dashFrom} → ${dashTo}` : "pick dates";
+    if (range === "custom") return (from && to) ? `${from} → ${to}` : "pick dates";
     return `last ${range} days`;
   }
-  // Rows for the active dashboard range.
-  function rangeRows() {
-    if (dashRange === "custom") {
-      if (!dashFrom || !dashTo) return [];
-      return logs.filter((l) => l.date >= dashFrom && l.date <= dashTo);
-    }
-    const since = sinceKeyFor(dashRange);
-    return since ? logs.filter((l) => l.date >= since) : logs;
+  function rowsInRange(all, range, from, to) {
+    if (range === "custom") { if (!from || !to) return []; return all.filter((l) => l.date >= from && l.date <= to); }
+    const since = sinceKeyFor(range);
+    return since ? all.filter((l) => l.date >= since) : all;
   }
-  function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+  // Backwards-compatible wrappers for the Dashboard's own state.
+  function rangeLabel(range) { return rangeLabelG(range, dashFrom, dashTo); }
+  function rangeRows() { return rowsInRange(logs, dashRange, dashFrom, dashTo); }
 
   function generateShortCode() {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -156,9 +163,56 @@
     return people.filter((x) => x.id !== p.id && (x.recruited_by === p.id ||
       (!x.recruited_by && x.recruited_by_name && x.recruited_by_name === p.name)));
   }
+  const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  function hourLabel(h) {
+    const ampm = h < 12 ? "a" : "p";
+    let hr = h % 12; if (hr === 0) hr = 12;
+    return hr + ampm;
+  }
+  function logHour(l) { return new Date(l.created_at || (l.date + "T12:00:00")).getHours(); }
+  function logDow(l) { return new Date(l.created_at || (l.date + "T12:00:00")).getDay(); }
+
+  // Deep analytics for one person over a set of rows: hour-of-day and
+  // weekday buckets, plus best/worst callouts.
+  function personAnalytics(rows) {
+    const hours = Array.from({ length: 24 }, () => ({ doors: 0, answered: 0, sales: 0, revenue: 0 }));
+    const dows = Array.from({ length: 7 }, () => ({ doors: 0, answered: 0, sales: 0, revenue: 0 }));
+    const dayset = {};
+    rows.forEach((l) => {
+      const answered = ["answered", "pitch", "appointment", "sale"].includes(l.outcome);
+      const sale = l.outcome === "sale";
+      const rev = Number(l.contract_value || 0);
+      const h = logHour(l), w = logDow(l);
+      hours[h].doors++; if (answered) hours[h].answered++; if (sale) hours[h].sales++; hours[h].revenue += rev;
+      dows[w].doors++; if (answered) dows[w].answered++; if (sale) dows[w].sales++; dows[w].revenue += rev;
+      dayset[l.date] = true;
+    });
+    const agg = aggregate(rows);
+    const activeDays = Object.keys(dayset).length;
+    // best/worst answering hours need a minimum sample to be meaningful
+    const MIN = 3;
+    let bestAns = null, worstAns = null, bestSales = null, busiest = null;
+    hours.forEach((b, h) => {
+      if (b.doors >= MIN) {
+        const r = b.answered / b.doors;
+        if (!bestAns || r > bestAns.rate) bestAns = { h, rate: r };
+        if (!worstAns || r < worstAns.rate) worstAns = { h, rate: r };
+      }
+      if (!bestSales || b.sales > bestSales.sales) bestSales = { h, sales: b.sales };
+      if (!busiest || b.doors > busiest.doors) busiest = { h, doors: b.doors };
+    });
+    let bestDow = null;
+    dows.forEach((b, w) => { if (!bestDow || b.sales > bestDow.sales) bestDow = { w, sales: b.sales, revenue: b.revenue }; });
+    const answerRate = agg.doors ? (agg.answered / agg.doors) * 100 : NaN;
+    return { ...agg, hours, dows, activeDays, perDay: activeDays ? agg.doors / activeDays : 0,
+      answerRate, bestAns, worstAns, bestSales, busiest, bestDow };
+  }
 
   // Build a daily (or monthly for large spans) time series from log rows.
-  function seriesFor(rows, range) {
+  // from/to default to the Dashboard's custom-range state.
+  function seriesFor(rows, range, from, to) {
+    if (from === undefined) from = dashFrom;
+    if (to === undefined) to = dashTo;
     const labels = [], doors = [], sales = [], revenue = [];
     const pushDay = (key) => {
       const dr = rows.filter((r) => r.date === key);
@@ -179,12 +233,12 @@
         revenue.push(mr.reduce((s, x) => s + Number(x.contract_value || 0), 0));
       }
     } else if (range === "custom") {
-      if (dashFrom && dashTo) {
-        const span = Math.max(0, daysBetween(dashFrom, dashTo));
+      if (from && to) {
+        const span = Math.max(0, daysBetween(from, to));
         // Long custom spans bucket by month to stay readable.
         if (span > 92) {
-          const start = new Date(dashFrom);
-          const end = new Date(dashTo);
+          const start = new Date(from);
+          const end = new Date(to);
           let d = new Date(start.getFullYear(), start.getMonth(), 1);
           while (d <= end) {
             const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
@@ -196,7 +250,7 @@
             d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
           }
         } else {
-          const start = new Date(dashFrom);
+          const start = new Date(from);
           for (let i = 0; i <= span; i++) {
             const d = new Date(start); d.setDate(d.getDate() + i);
             pushDay(dkey(d));
@@ -260,9 +314,10 @@
   }
 
   function renderApp() {
-    const tabs = [["dashboard", "Dashboard"], ["teams", "Teams"], ["people", "People"]];
+    const tabs = [["dashboard", "Dashboard"], ["kpis", "KPIs"], ["teams", "Teams"], ["people", "People"]];
     let body = "";
     if (activeTab === "dashboard") body = renderDashboard();
+    else if (activeTab === "kpis") body = kpiPersonId ? renderKpiPerson() : renderKpiList();
     else if (activeTab === "teams") body = renderTeams();
     else if (activeTab === "people") body = viewPersonId ? renderPersonDetail() : renderPeople();
 
@@ -282,7 +337,7 @@
 
     bind("#signOut", "click", async () => { await sb.auth.signOut(); session = null; profile = null; render(); });
     document.querySelectorAll("[data-tab]").forEach((b) =>
-      b.addEventListener("click", () => { activeTab = b.dataset.tab; viewPersonId = null; render(); }));
+      b.addEventListener("click", () => { activeTab = b.dataset.tab; viewPersonId = null; kpiPersonId = null; render(); }));
     bindTabEvents();
   }
 
@@ -392,6 +447,141 @@
           <div class="progress-row"><div class="row-head"><b>${escapeHtml(name)}</b><span>${n} recruit${n === 1 ? "" : "s"}</span></div></div>`).join("")
           : `<p class="empty">No recruit links yet.</p>`}
       </section>`;
+  }
+
+  // ── KPIs tab (view-only analytics) ──────────────────────────────
+  function kpiRangeUI() {
+    return `
+      <div class="range-chips">
+        ${RANGES.map(([v, l]) => `<button data-kpi-range="${v}" class="${kpiRange === v ? "active" : ""}" type="button">${l}</button>`).join("")}
+      </div>
+      ${kpiRange === "custom" ? `
+      <div class="custom-range">
+        <label>From <input id="kpiFrom" type="date" value="${escapeAttr(kpiFrom)}" /></label>
+        <label>To <input id="kpiTo" type="date" value="${escapeAttr(kpiTo)}" /></label>
+        <button id="kpiApplyCustom" class="blue" type="button">Apply</button>
+      </div>` : ""}`;
+  }
+
+  function renderKpiList() {
+    const rows = rowsInRange(logs, kpiRange, kpiFrom, kpiTo);
+    const teamName = (id) => (teams.find((t) => t.id === id) || {}).name || "No team";
+    const stats = people.filter((p) => !p.disabled).map((p) => ({ p, a: personAnalytics(rows.filter((r) => r.user_id === p.id)) }));
+    const sorters = {
+      revenue: (x) => x.a.revenue, doors: (x) => x.a.doors,
+      closeRate: (x) => (Number.isFinite(x.a.closeRate) ? x.a.closeRate : -1),
+      answerRate: (x) => (Number.isFinite(x.a.answerRate) ? x.a.answerRate : -1),
+      perDay: (x) => x.a.perDay,
+    };
+    stats.sort((x, y) => sorters[kpiSort](y) - sorters[kpiSort](x));
+    const SORTS = [["revenue", "Revenue"], ["doors", "Doors"], ["closeRate", "Close %"], ["answerRate", "Answer %"], ["perDay", "Doors/day"]];
+
+    return `
+      <div class="section-title"><h2>KPIs</h2><span>${rangeLabelG(kpiRange, kpiFrom, kpiTo)}</span></div>
+      ${kpiRangeUI()}
+      <section class="card stack">
+        <div class="row-inline">
+          <input id="kpiSearch" placeholder="Search by name..." />
+          <select id="kpiTeamFilter">
+            <option value="all">All teams</option>
+            ${teams.map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("")}
+          </select>
+          <select id="kpiSortSel">
+            ${SORTS.map(([v, l]) => `<option value="${v}" ${kpiSort === v ? "selected" : ""}>Sort: ${l}</option>`).join("")}
+          </select>
+        </div>
+        <div class="section-title"><h3>Everyone</h3><span>tap for full analytics</span></div>
+        ${stats.map(({ p, a }) => `
+          <article class="record" data-kpi-person="${p.id}" data-name="${escapeAttr((p.name || "").toLowerCase())}" data-team="${escapeAttr(p.team_id || "")}" style="cursor:pointer">
+            <div class="record-top"><strong>${escapeHtml(p.name)}</strong><span class="pill blue">${money(a.revenue)}</span></div>
+            <div class="meta-row">
+              <span>${escapeHtml(teamName(p.team_id))}</span>
+              <span>${a.doors} doors</span>
+              <span>${a.perDay.toFixed(1)}/day</span>
+              <span>${pct(a.closeRate)} close</span>
+              <span>${pct(a.answerRate)} answer</span>
+              <span>${a.sales} sales</span>
+            </div>
+          </article>`).join("") || `<p class="empty">No people yet.</p>`}
+      </section>`;
+  }
+
+  function bestTimeCard(label, hourInfo, extra) {
+    if (!hourInfo) return `<div class="stat"><small>${label}</small><strong>—</strong><span>not enough data</span></div>`;
+    return `<div class="stat"><small>${label}</small><strong>${hourLabel(hourInfo.h)}</strong><span>${extra}</span></div>`;
+  }
+
+  function renderKpiPerson() {
+    const p = people.find((x) => x.id === kpiPersonId);
+    if (!p) { kpiPersonId = null; return renderKpiList(); }
+    const rows = rowsInRange(logs, kpiRange, kpiFrom, kpiTo).filter((r) => r.user_id === p.id);
+    const a = personAnalytics(rows);
+    const ser = seriesFor(rows, kpiRange, kpiFrom, kpiTo);
+    const teamName = (id) => (teams.find((t) => t.id === id) || {}).name || "No team";
+    const hourLabels = a.hours.map((_, h) => hourLabel(h));
+    const answerByHour = a.hours.map((b) => (b.doors ? Math.round((b.answered / b.doors) * 100) : 0));
+    const avgSale = a.sales ? a.revenue / a.sales : 0;
+
+    return `
+      <button class="back-link" id="backToKpis" type="button">&larr; All people</button>
+      <div class="section-title"><h2>${escapeHtml(p.name)}</h2><span>${escapeHtml(teamName(p.team_id))} · ${escapeHtml(ROLE_LABELS[p.role] || p.role)}</span></div>
+      ${kpiRangeUI()}
+
+      <div class="stat-grid">
+        <div class="stat"><small>Doors</small><strong>${a.doors}</strong><span>${rangeLabelG(kpiRange, kpiFrom, kpiTo)}</span></div>
+        <div class="stat"><small>Doors / day</small><strong>${a.perDay.toFixed(1)}</strong><span>${a.activeDays} active days</span></div>
+        <div class="stat"><small>Sales</small><strong>${a.sales}</strong><span>${a.appts} appts</span></div>
+        <div class="stat"><small>Revenue</small><strong>${money(a.revenue)}</strong><span>${money(avgSale)}/sale</span></div>
+        <div class="stat"><small>Close rate</small><strong>${pct(a.closeRate)}</strong><span>of answered</span></div>
+        <div class="stat"><small>Answer rate</small><strong>${pct(a.answerRate)}</strong><span>of doors</span></div>
+      </div>
+
+      <section class="card stack">
+        <div class="section-title"><h3>Best & Worst Times</h3><span>when they perform</span></div>
+        <div class="stat-grid">
+          ${bestTimeCard("Best answering hour", a.bestAns, a.bestAns ? Math.round(a.bestAns.rate * 100) + "% answer" : "")}
+          ${bestTimeCard("Worst answering hour", a.worstAns, a.worstAns ? Math.round(a.worstAns.rate * 100) + "% answer" : "")}
+          ${bestTimeCard("Best selling hour", a.bestSales && a.bestSales.sales ? a.bestSales : null, a.bestSales ? a.bestSales.sales + " sales" : "")}
+          ${bestTimeCard("Busiest hour", a.busiest && a.busiest.doors ? a.busiest : null, a.busiest ? a.busiest.doors + " doors" : "")}
+          <div class="stat"><small>Best day</small><strong>${a.bestDow && a.bestDow.sales ? DOW[a.bestDow.w] : "—"}</strong><span>${a.bestDow && a.bestDow.sales ? a.bestDow.sales + " sales" : "not enough data"}</span></div>
+        </div>
+      </section>
+
+      <section class="card stack">
+        <div class="section-title"><h3>Doors over time</h3><span>${rangeLabelG(kpiRange, kpiFrom, kpiTo)}</span></div>
+        ${barsHtml(ser.doors, ser.labels, { color: "var(--core-blue)" })}
+      </section>
+      <section class="card stack">
+        <div class="section-title"><h3>Sales over time</h3><span>${rangeLabelG(kpiRange, kpiFrom, kpiTo)}</span></div>
+        ${barsHtml(ser.sales, ser.labels, { color: "var(--slate)" })}
+      </section>
+      <section class="card stack">
+        <div class="section-title"><h3>Revenue over time</h3><span>${rangeLabelG(kpiRange, kpiFrom, kpiTo)}</span></div>
+        ${barsHtml(ser.revenue, ser.labels, { color: "var(--good)", fmt: (v) => money(v) })}
+      </section>
+
+      <section class="card stack">
+        <div class="section-title"><h3>Doors by hour of day</h3><span>when they knock</span></div>
+        ${barsHtml(a.hours.map((b) => b.doors), hourLabels, { color: "var(--core-blue)" })}
+      </section>
+      <section class="card stack">
+        <div class="section-title"><h3>Answer rate by hour</h3><span>% of doors answered</span></div>
+        ${barsHtml(answerByHour, hourLabels, { color: "var(--good)", fmt: (v) => v + "%" })}
+      </section>
+      <section class="card stack">
+        <div class="section-title"><h3>Sales by hour</h3><span>when they close</span></div>
+        ${barsHtml(a.hours.map((b) => b.sales), hourLabels, { color: "var(--slate)" })}
+      </section>
+      <section class="card stack">
+        <div class="section-title"><h3>Doors by weekday</h3><span>weekly pattern</span></div>
+        ${barsHtml(a.dows.map((b) => b.doors), DOW, { color: "var(--core-blue)" })}
+      </section>
+      <section class="card stack">
+        <div class="section-title"><h3>Sales by weekday</h3><span>weekly pattern</span></div>
+        ${barsHtml(a.dows.map((b) => b.sales), DOW, { color: "var(--slate)" })}
+      </section>
+
+      <p class="muted" style="text-align:center">To edit this person's numbers or info, use the <b>People</b> tab.</p>`;
   }
 
   // ── Teams tab ───────────────────────────────────────────────────
@@ -586,6 +776,23 @@
       dashTo = val("#dashTo");
       render();
     });
+    // KPIs tab
+    document.querySelectorAll("[data-kpi-range]").forEach((b) =>
+      b.addEventListener("click", () => {
+        kpiRange = b.dataset.kpiRange;
+        if (kpiRange === "custom" && !kpiTo) {
+          kpiTo = dkey(new Date());
+          const f = new Date(); f.setDate(f.getDate() - 30); kpiFrom = dkey(f);
+        }
+        render();
+      }));
+    bind("#kpiApplyCustom", "click", () => { kpiFrom = val("#kpiFrom"); kpiTo = val("#kpiTo"); render(); });
+    bind("#kpiSortSel", "change", (e) => { kpiSort = e.target.value; render(); });
+    bind("#kpiSearch", "input", filterKpiList);
+    bind("#kpiTeamFilter", "change", filterKpiList);
+    document.querySelectorAll("[data-kpi-person]").forEach((el) =>
+      el.addEventListener("click", () => { kpiPersonId = el.dataset.kpiPerson; render(); }));
+    bind("#backToKpis", "click", () => { kpiPersonId = null; render(); });
     // teams
     bind("#createTeam", "click", createTeam);
     document.querySelectorAll("[data-rename-team]").forEach((b) =>
@@ -611,6 +818,17 @@
     const q = (val("#peopleSearch") || "").toLowerCase();
     const t = val("#peopleTeamFilter");
     document.querySelectorAll("[data-person-row]").forEach((el) => {
+      const name = el.getAttribute("data-name") || "";
+      const team = el.getAttribute("data-team") || "";
+      const show = name.includes(q) && (!t || t === "all" || team === t);
+      el.style.display = show ? "" : "none";
+    });
+  }
+
+  function filterKpiList() {
+    const q = (val("#kpiSearch") || "").toLowerCase();
+    const t = val("#kpiTeamFilter");
+    document.querySelectorAll("[data-kpi-person]").forEach((el) => {
       const name = el.getAttribute("data-name") || "";
       const team = el.getAttribute("data-team") || "";
       const show = name.includes(q) && (!t || t === "all" || team === t);
