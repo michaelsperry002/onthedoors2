@@ -40,6 +40,10 @@
   let kpiFrom = "";
   let kpiTo = "";
   let kpiSort = "revenue"; // revenue | doors | closeRate | answerRate | perDay
+  // Time-of-day / weekday filters for a person's KPI profile.
+  let kpiHourStart = 0;
+  let kpiHourEnd = 23;
+  let kpiDow = "all"; // all | weekdays | weekends | 0..6
 
   const appRoot = () => document.getElementById("app");
   const $ = (sel) => document.querySelector(sel);
@@ -276,11 +280,23 @@
     const fmt = o.fmt || ((v) => String(v));
     const max = Math.max(1, ...values);
     const step = Math.max(1, Math.ceil(values.length / 8));
-    return `<div class="chart-wrap"><div class="bars">${values.map((v, i) => `
-      <div class="bar-col">
-        <div class="bar-fill" style="height:${(v / max * 100).toFixed(1)}%;background:${color}" title="${escapeAttr(labels[i])}: ${escapeAttr(fmt(v))}"></div>
-        <span>${(i % step === 0 || i === values.length - 1) ? escapeHtml(shortLabel(labels[i])) : "&nbsp;"}</span>
-      </div>`).join("")}</div></div>`;
+    // Show a number above each bar only when there's room.
+    const showVals = o.showValues !== false && values.length <= 16;
+    // Horizontal gridlines with value labels so magnitudes are readable.
+    const grid = [1, 0.75, 0.5, 0.25, 0].map((f) =>
+      `<div class="grid-line"><span>${escapeHtml(fmt(Math.round(max * f)))}</span></div>`).join("");
+    return `<div class="chart-wrap"><div class="chart">
+      <div class="plot">
+        <div class="grid">${grid}</div>
+        <div class="bars">${values.map((v, i) => `
+          <div class="bar-col">
+            ${showVals ? `<b class="bar-val">${v ? escapeHtml(fmt(v)) : ""}</b>` : ""}
+            <div class="bar-fill" style="height:${(v / max * 100).toFixed(1)}%;background:${color}" title="${escapeAttr(labels[i])}: ${escapeAttr(fmt(v))}"></div>
+          </div>`).join("")}</div>
+      </div>
+      <div class="xaxis">${values.map((v, i) =>
+        `<span title="${escapeAttr(labels[i])}">${(i % step === 0 || i === values.length - 1) ? escapeHtml(shortLabel(labels[i])) : "&nbsp;"}</span>`).join("")}</div>
+    </div></div>`;
   }
 
   // ── Rendering ───────────────────────────────────────────────────
@@ -511,21 +527,58 @@
     return `<div class="stat"><small>${label}</small><strong>${hourLabel(hourInfo.h)}</strong><span>${extra}</span></div>`;
   }
 
+  // Apply the hour-window + weekday filters to a person's rows.
+  function applyTimeFilters(rows) {
+    return rows.filter((l) => {
+      const h = logHour(l), w = logDow(l);
+      if (h < kpiHourStart || h > kpiHourEnd) return false;
+      if (kpiDow === "weekdays" && (w === 0 || w === 6)) return false;
+      if (kpiDow === "weekends" && !(w === 0 || w === 6)) return false;
+      if (/^[0-6]$/.test(kpiDow) && w !== Number(kpiDow)) return false;
+      return true;
+    });
+  }
+  const timeFiltersActive = () => kpiHourStart !== 0 || kpiHourEnd !== 23 || kpiDow !== "all";
+
+  function kpiFilterUI() {
+    const hourOpts = (sel) => Array.from({ length: 24 }, (_, h) =>
+      `<option value="${h}" ${sel === h ? "selected" : ""}>${hourLabel(h)}</option>`).join("");
+    const dowOpts = [["all", "All days"], ["weekdays", "Weekdays"], ["weekends", "Weekends"],
+      ["1", "Mondays"], ["2", "Tuesdays"], ["3", "Wednesdays"], ["4", "Thursdays"], ["5", "Fridays"], ["6", "Saturdays"], ["0", "Sundays"]];
+    return `
+      <section class="card stack">
+        <div class="section-title"><h3>Filters</h3><span>focus the analysis</span></div>
+        <div class="form-2col">
+          <label>From hour <select id="kpiHourStart">${hourOpts(kpiHourStart)}</select></label>
+          <label>To hour <select id="kpiHourEnd">${hourOpts(kpiHourEnd)}</select></label>
+          <label>Days <select id="kpiDow">${dowOpts.map(([v, l]) => `<option value="${v}" ${kpiDow === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          <label>&nbsp;<button id="kpiResetFilters" class="secondary" type="button">Reset filters</button></label>
+        </div>
+      </section>`;
+  }
+
   function renderKpiPerson() {
     const p = people.find((x) => x.id === kpiPersonId);
     if (!p) { kpiPersonId = null; return renderKpiList(); }
-    const rows = rowsInRange(logs, kpiRange, kpiFrom, kpiTo).filter((r) => r.user_id === p.id);
+    const rows = applyTimeFilters(rowsInRange(logs, kpiRange, kpiFrom, kpiTo).filter((r) => r.user_id === p.id));
     const a = personAnalytics(rows);
     const ser = seriesFor(rows, kpiRange, kpiFrom, kpiTo);
     const teamName = (id) => (teams.find((t) => t.id === id) || {}).name || "No team";
-    const hourLabels = a.hours.map((_, h) => hourLabel(h));
-    const answerByHour = a.hours.map((b) => (b.doors ? Math.round((b.answered / b.doors) * 100) : 0));
+    // Only chart the hours inside the selected window.
+    const hStart = Math.min(kpiHourStart, kpiHourEnd), hEnd = Math.max(kpiHourStart, kpiHourEnd);
+    const hourIdx = a.hours.map((_, h) => h).filter((h) => h >= hStart && h <= hEnd);
+    const hourLabels = hourIdx.map((h) => hourLabel(h));
+    const doorsByHour = hourIdx.map((h) => a.hours[h].doors);
+    const salesByHour = hourIdx.map((h) => a.hours[h].sales);
+    const answerByHour = hourIdx.map((h) => (a.hours[h].doors ? Math.round((a.hours[h].answered / a.hours[h].doors) * 100) : 0));
     const avgSale = a.sales ? a.revenue / a.sales : 0;
 
     return `
       <button class="back-link" id="backToKpis" type="button">&larr; All people</button>
       <div class="section-title"><h2>${escapeHtml(p.name)}</h2><span>${escapeHtml(teamName(p.team_id))} · ${escapeHtml(ROLE_LABELS[p.role] || p.role)}</span></div>
       ${kpiRangeUI()}
+      ${kpiFilterUI()}
+      ${timeFiltersActive() ? `<p class="muted" style="text-align:center">Showing ${hourLabel(hStart)}–${hourLabel(hEnd)}${kpiDow !== "all" ? " · " + (["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][kpiDow] || kpiDow) : ""} only</p>` : ""}
 
       <div class="stat-grid">
         <div class="stat"><small>Doors</small><strong>${a.doors}</strong><span>${rangeLabelG(kpiRange, kpiFrom, kpiTo)}</span></div>
@@ -562,7 +615,7 @@
 
       <section class="card stack">
         <div class="section-title"><h3>Doors by hour of day</h3><span>when they knock</span></div>
-        ${barsHtml(a.hours.map((b) => b.doors), hourLabels, { color: "var(--core-blue)" })}
+        ${barsHtml(doorsByHour, hourLabels, { color: "var(--core-blue)" })}
       </section>
       <section class="card stack">
         <div class="section-title"><h3>Answer rate by hour</h3><span>% of doors answered</span></div>
@@ -570,7 +623,7 @@
       </section>
       <section class="card stack">
         <div class="section-title"><h3>Sales by hour</h3><span>when they close</span></div>
-        ${barsHtml(a.hours.map((b) => b.sales), hourLabels, { color: "var(--slate)" })}
+        ${barsHtml(salesByHour, hourLabels, { color: "var(--slate)" })}
       </section>
       <section class="card stack">
         <div class="section-title"><h3>Doors by weekday</h3><span>weekly pattern</span></div>
@@ -793,6 +846,10 @@
     document.querySelectorAll("[data-kpi-person]").forEach((el) =>
       el.addEventListener("click", () => { kpiPersonId = el.dataset.kpiPerson; render(); }));
     bind("#backToKpis", "click", () => { kpiPersonId = null; render(); });
+    bind("#kpiHourStart", "change", (e) => { kpiHourStart = Number(e.target.value); render(); });
+    bind("#kpiHourEnd", "change", (e) => { kpiHourEnd = Number(e.target.value); render(); });
+    bind("#kpiDow", "change", (e) => { kpiDow = e.target.value; render(); });
+    bind("#kpiResetFilters", "click", () => { kpiHourStart = 0; kpiHourEnd = 23; kpiDow = "all"; render(); });
     // teams
     bind("#createTeam", "click", createTeam);
     document.querySelectorAll("[data-rename-team]").forEach((b) =>

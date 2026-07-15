@@ -224,39 +224,62 @@ table.day-table td:last-child, table.day-table th:last-child { text-align: right
 }
 .range-chips button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
 
-/* bar charts */
+/* bar charts with gridlines + axis labels */
 .chart-wrap { overflow-x: auto; }
+.chart { min-width: 100%; }
+.plot { position: relative; height: 140px; }
+.grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.grid-line { position: relative; border-top: 1px dashed var(--line); height: 0; }
+.grid-line span {
+  position: absolute;
+  left: 0;
+  top: -0.65em;
+  font-size: 9px;
+  color: var(--muted);
+  background: var(--panel);
+  padding: 0 4px 0 0;
+}
 .bars {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: flex-end;
   gap: 3px;
-  height: 120px;
-  min-width: 100%;
-  padding-top: 6px;
+  z-index: 1;
 }
 .bar-col {
-  flex: 1 0 8px;
+  flex: 1 0 6px;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  height: 100%;
-  gap: 5px;
   min-width: 0;
 }
+.bar-val { font-size: 9px; font-weight: 700; color: var(--slate); margin-bottom: 2px; white-space: nowrap; }
 .bar-fill {
   width: 72%;
   min-height: 2px;
   border-radius: 4px 4px 0 0;
   transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.bar-col span {
+.xaxis { display: flex; gap: 3px; margin-top: 5px; }
+.xaxis span {
+  flex: 1 0 6px;
+  text-align: center;
   font-size: 9px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  min-width: 0;
 }
 
 /* horizontal progress track (team revenue) */
