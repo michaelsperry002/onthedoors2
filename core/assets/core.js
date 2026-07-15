@@ -173,6 +173,12 @@
     let hr = h % 12; if (hr === 0) hr = 12;
     return hr + ampm;
   }
+  // Full "10 AM" / "2 PM" form for the filter dropdowns.
+  function hourLabelAmPm(h) {
+    const ampm = h < 12 ? "AM" : "PM";
+    let hr = h % 12; if (hr === 0) hr = 12;
+    return hr + " " + ampm;
+  }
   function logHour(l) { return new Date(l.created_at || (l.date + "T12:00:00")).getHours(); }
   function logDow(l) { return new Date(l.created_at || (l.date + "T12:00:00")).getDay(); }
 
@@ -542,7 +548,7 @@
 
   function kpiFilterUI() {
     const hourOpts = (sel) => Array.from({ length: 24 }, (_, h) =>
-      `<option value="${h}" ${sel === h ? "selected" : ""}>${hourLabel(h)}</option>`).join("");
+      `<option value="${h}" ${sel === h ? "selected" : ""}>${hourLabelAmPm(h)}</option>`).join("");
     const dowOpts = [["all", "All days"], ["weekdays", "Weekdays"], ["weekends", "Weekends"],
       ["1", "Mondays"], ["2", "Tuesdays"], ["3", "Wednesdays"], ["4", "Thursdays"], ["5", "Fridays"], ["6", "Saturdays"], ["0", "Sundays"]];
     return `
@@ -578,7 +584,7 @@
       <div class="section-title"><h2>${escapeHtml(p.name)}</h2><span>${escapeHtml(teamName(p.team_id))} · ${escapeHtml(ROLE_LABELS[p.role] || p.role)}</span></div>
       ${kpiRangeUI()}
       ${kpiFilterUI()}
-      ${timeFiltersActive() ? `<p class="muted" style="text-align:center">Showing ${hourLabel(hStart)}–${hourLabel(hEnd)}${kpiDow !== "all" ? " · " + (["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][kpiDow] || kpiDow) : ""} only</p>` : ""}
+      ${timeFiltersActive() ? `<p class="muted" style="text-align:center">Showing ${hourLabelAmPm(hStart)}–${hourLabelAmPm(hEnd)}${kpiDow !== "all" ? " · " + (["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][kpiDow] || kpiDow) : ""} only</p>` : ""}
 
       <div class="stat-grid">
         <div class="stat"><small>Doors</small><strong>${a.doors}</strong><span>${rangeLabelG(kpiRange, kpiFrom, kpiTo)}</span></div>
