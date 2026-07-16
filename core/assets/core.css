@@ -301,3 +301,54 @@ table.day-table td:last-child, table.day-table th:last-child { text-align: right
 }
 .custom-range label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: var(--slate); flex: 1; min-width: 130px; }
 .custom-range button { flex: 0 0 auto; }
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE-FIRST POLISH  (SaaS-grade flow, keeps CORE branding)
+   ════════════════════════════════════════════════════════════════ */
+html { -webkit-text-size-adjust: 100%; }
+body { overflow-x: hidden; }
+::selection { background: rgba(30, 79, 255, 0.18); }
+
+/* smoother interactions everywhere */
+button { transition: transform 0.12s ease, background 0.18s ease, box-shadow 0.18s ease, opacity 0.15s ease; }
+button.primary, button.blue { box-shadow: 0 2px 8px rgba(20, 33, 61, 0.14); }
+button.primary:hover, button.blue:hover { box-shadow: 0 4px 14px rgba(30, 79, 255, 0.28); }
+input, select, textarea { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(30, 79, 255, 0.14); }
+
+/* refined cards + subtle hover lift on pointer devices */
+.card, .stat { transition: box-shadow 0.2s ease, transform 0.2s ease; }
+@media (hover: hover) {
+  .record[data-view-person]:hover, .record[data-kpi-person]:hover { background: var(--panel-2); border-radius: 12px; }
+  .stat:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(20, 33, 61, 0.12); }
+}
+
+/* safe-area aware sticky top bar */
+.topbar { padding-top: calc(12px + env(safe-area-inset-top)); }
+
+/* thumb-friendly bottom tab bar on phones */
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px; }  /* stop iOS auto-zoom */
+  .tabs {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0; z-index: 40;
+    justify-content: space-around; gap: 2px;
+    border-top: 1px solid var(--line); border-bottom: none;
+    padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+    box-shadow: 0 -6px 22px rgba(20, 33, 61, 0.08);
+  }
+  .tabs button { flex: 1; text-align: center; padding: 10px 4px; font-size: 12.5px; border-radius: 10px; }
+  main.wrap { padding: 16px 14px calc(90px + env(safe-area-inset-bottom)); }
+  .topbar h1 { font-size: 16px; }
+  .section-title h2 { font-size: 18px; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat strong { font-size: 22px; }
+  .range-chips button { padding: 8px 15px; }        /* bigger tap targets */
+  .row-inline > input, .row-inline > select { min-height: 44px; }
+  button { min-height: 42px; }
+  .day-table { font-size: 12px; }
+}
+
+/* keep the top bar tidy on very small phones */
+@media (max-width: 400px) {
+  .topbar small { display: none; }
+}
