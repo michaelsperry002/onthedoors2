@@ -103,17 +103,17 @@ main.wrap { padding: 16px 14px 60px; display: grid; gap: 14px; }
 .chip small { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
 .chip strong { font-size: 18px; }
 
-/* kanban */
-.board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; align-items: flex-start; }
+/* kanban — vertical stacked board (columns go downward) */
+.board { display: flex; flex-direction: column; gap: 12px; }
 .column {
-  flex: 0 0 260px; background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 78vh;
+  width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px;
 }
 .column.dragover { outline: 2px dashed var(--blue); outline-offset: -2px; }
 .column-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
 .column-head b { font-size: 13px; }
 .column-head .count { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; color: var(--muted); }
-.column-body { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 24px; }
+.column-body { display: flex; flex-direction: column; gap: 8px; min-height: 24px; }
 
 .cand-card {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
@@ -192,9 +192,6 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(30, 79, 2
 .fab { transition: transform 0.14s ease, box-shadow 0.2s ease; }
 .fab:hover { box-shadow: 0 10px 28px rgba(30, 79, 255, 0.5); }
 
-/* smooth horizontal snap on the board */
-.board { scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
-.column { scroll-snap-align: start; }
 
 @media (max-width: 640px) {
   input, select, textarea { font-size: 16px; }   /* stop iOS auto-zoom */
@@ -208,7 +205,6 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(30, 79, 2
   .tabs button { flex: 1; text-align: center; padding: 10px 4px; font-size: 12.5px; border-radius: 10px; }
   main.wrap { padding: 14px 12px calc(92px + env(safe-area-inset-bottom)); }
   .fab { bottom: calc(88px + env(safe-area-inset-bottom)); right: 16px; }
-  .column { flex-basis: 82vw; max-height: none; }   /* near-full-width columns, easy swipe */
   .toolbar input, .toolbar select { min-height: 44px; }
   button { min-height: 42px; }
   .modal { border-radius: 20px 20px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
