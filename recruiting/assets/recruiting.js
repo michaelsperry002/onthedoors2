@@ -353,8 +353,8 @@
           <label>Tag <select id="mFlag" ${dis}>${flagOpts}</select></label>
           <label>Recruiter <select id="mRecruiter" ${dis}>${recOpts}</select></label>
           <label>Team <select id="mTeam" ${dis}>${teamOpts}</select></label>
-          <label>Follow-up date <input id="mFollow" type="date" value="${esc(c.follow_up_date || "")}" ${dis} /></label>
-          <label>Appointment <input id="mAppt" type="datetime-local" value="${esc(toLocalInput(c.appt_at))}" ${dis} /></label>
+          ${!isNew ? `<label>Follow-up date <input id="mFollow" type="date" value="${esc(c.follow_up_date || "")}" ${dis} /></label>` : ""}
+          ${!isNew ? `<label>Appointment <input id="mAppt" type="datetime-local" value="${esc(toLocalInput(c.appt_at))}" ${dis} /></label>` : ""}
         </div>
         <label>Notes <textarea id="mNotes" ${dis}>${esc(c.notes || "")}</textarea></label>
         ${!editable ? `<p class="muted">View only — you don't have permission to edit this candidate.</p>` : ""}
@@ -391,12 +391,14 @@
       flag_id: val("#mFlag") || null,
       recruiter_id: val("#mRecruiter") || profile.id,
       team_id: val("#mTeam") || profile.team_id,
-      follow_up_date: val("#mFollow") || null,
-      appt_at: fromLocalInput(val("#mAppt")),
       notes: val("#mNotes").trim(),
       hired: !!(stage && stage.is_final),
       updated_at: new Date().toISOString(),
     };
+    // Follow-up + appointment only exist on the edit form (later stages),
+    // so only send them when those fields are present.
+    if (document.querySelector("#mFollow")) row.follow_up_date = val("#mFollow") || null;
+    if (document.querySelector("#mAppt")) row.appt_at = fromLocalInput(val("#mAppt"));
     if (!row.name) { alert("Name is required."); return; }
     if (isNew) {
       row.owner_id = profile.id;

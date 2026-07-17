@@ -847,6 +847,14 @@
           ${p.email ? `<button id="pdReset" class="secondary" type="button">Send Password Reset</button>` : ""}
           <button id="pdToggle" class="${p.disabled ? "secondary" : "danger"}" type="button">${p.disabled ? "Reactivate" : "Deactivate"}</button>
         </div>
+        ${perms.isAdmin ? `
+        <hr class="divider" />
+        <div class="section-title"><h3>Set Password</h3><span>overwrite &amp; hand off</span></div>
+        <div class="row-inline">
+          <input id="pdNewPw" type="text" placeholder="New password (min 6 characters)" autocomplete="off" />
+          <button id="pdSetPw" class="blue" type="button">Set Password</button>
+        </div>
+        <small class="muted">Sets ${escapeHtml(p.name)}'s password immediately, then tell them the new one. Existing passwords can't be shown — only replaced.</small>` : ""}
         ${perms.canDelete ? `
         <hr class="divider" />
         <button id="pdDelete" class="danger" type="button">Delete Person Permanently</button>
@@ -920,6 +928,7 @@
     bind("#pdReset", "click", sendReset);
     bind("#pdToggle", "click", togglePersonDisabled);
     bind("#pdDelete", "click", deletePerson);
+    bind("#pdSetPw", "click", setPersonPassword);
   }
 
   function filterPeople() {
@@ -1062,6 +1071,34 @@
     const { error } = await sb.auth.resetPasswordForEmail(p.email);
     const btn = $("#pdReset");
     if (btn) btn.textContent = error ? "Couldn't send — try again" : "Reset email sent!";
+  }
+
+  // Set a rep's password via the admin-only Edge Function (service role
+  // stays server-side). Existing passwords can't be read — only replaced.
+  async function setPersonPassword() {
+    const p = people.find((x) => x.id === viewPersonId);
+    if (!p) return;
+    const pw = val("#pdNewPw");
+    if (!pw || pw.length < 6) { alert("Password must be at least 6 characters."); return; }
+    const btn = $("#pdSetPw");
+    if (btn) { btn.disabled = true; btn.textContent = "Setting..."; }
+    if (window.__CORE_MOCK_SB) { flash = `Password updated for ${p.name} (demo).`; render(); return; }
+    try {
+      const { data } = await sb.auth.getSession();
+      const token = data && data.session ? data.session.access_token : "";
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/set-password`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: p.id, password: pw }),
+      });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out.error || `Failed (${res.status})`);
+      flash = `Password updated for ${p.name}.`;
+      render();
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = "Set Password"; }
+      alert("Couldn't set password: " + e.message + "\n\nMake sure the set-password Edge Function is deployed.");
+    }
   }
 
   async function togglePersonDisabled() {
