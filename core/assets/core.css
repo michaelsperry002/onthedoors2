@@ -386,8 +386,8 @@ h1, h2, h3,
 .splash { display: grid; place-items: center; min-height: 100vh; }
 .splash img { width: 64px; height: 64px; border-radius: 16px; animation: splashPulse 1.1s ease-in-out infinite; }
 @keyframes splashPulse {
-  0%, 100% { opacity: 0.55; transform: scale(0.96); }
-  50% { opacity: 1; transform: scale(1); }
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
 }
 #app.app-enter { animation: coreFadeIn 0.32s ease both; }
 @keyframes coreFadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -395,3 +395,6 @@ h1, h2, h3,
 @media (prefers-reduced-motion: reduce) {
   .splash img, #app.app-enter { animation: none; }
 }
+
+/* Reserve scrollbar space so content never shifts sideways on load */
+html { scrollbar-gutter: stable; overflow-y: scroll; }
