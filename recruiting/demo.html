@@ -31,7 +31,13 @@
           { id: "c3", name: "Chris Dunn", phone: "(555) 200-1002", email: "cd@x.com", source: "cold", stage_id: "s6", flag_id: null, recruiter_id: ME, team_id: "t1", owner_id: ME, follow_up_date: "", hired: false, notes: "", created_at: "2026-07-05T10:00:00Z" },
           { id: "c4", name: "Noah Kim", phone: "(555) 200-1003", email: "nk@x.com", source: "referral", stage_id: "s8", flag_id: null, recruiter_id: "u2", team_id: "t2", owner_id: "u2", follow_up_date: "", hired: true, notes: "Starts Monday", created_at: "2026-07-01T10:00:00Z" },
         ];
-        const STORE = { pipeline_stages: stages, candidates, profiles, teams };
+        const resources = [
+          { id: "r1", kind: "link", title: "Company Overview", body: "3-min intro to what we do", url: "https://youtu.be/dQw4w9WgXcQ", category: "Video", position: 1 },
+          { id: "r2", kind: "link", title: "Comp Plan Deck", body: "How reps get paid", url: "https://example.com/deck", category: "Deck", position: 2 },
+          { id: "r3", kind: "template", title: "First Contact", body: "Hey {name}! It's ___ with CORE. Loved meeting you — got 15 min this week?", category: "Outreach", position: 3 },
+          { id: "r4", kind: "template", title: "Follow Up", body: "Hey {name}, circling back — still open to a quick meeting? Tue or Thu work?", category: "Outreach", position: 4 },
+        ];
+        const STORE = { pipeline_stages: stages, candidates, profiles, teams, resources };
 
         function makeBuilder(table) {
           const op = { filters: {}, single: false, insertRow: null, updatePatch: null, del: false };

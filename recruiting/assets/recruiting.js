@@ -27,7 +27,7 @@
   // ── State ───────────────────────────────────────────────────────
   let session = null, profile = null, loading = true, authError = "";
   let activeTab = "board";
-  let stages = [], flags = [], candidates = [], people = [], teams = [];
+  let stages = [], flags = [], candidates = [], people = [], teams = [], resources = [];
   let perms = {};
   let modal = null; // {type, ...}
   let filterText = "", filterStage = "all", filterFlag = "all", filterRecruiter = "all";
@@ -75,11 +75,12 @@
   }
 
   async function loadAll() {
-    const [stageRes, candRes, pplRes, teamRes] = await Promise.all([
+    const [stageRes, candRes, pplRes, teamRes, resRes] = await Promise.all([
       sb.from("pipeline_stages").select("*").order("position", { ascending: true }),
       sb.from("candidates").select("*").order("created_at", { ascending: false }),
       sb.from("profiles").select("id,name,role,team_id,region_id,email,phone,recruited_by,recruited_by_name"),
       sb.from("teams").select("*"),
+      sb.from("resources").select("*").order("position", { ascending: true }),
     ]);
     const allStages = stageRes.data || [];
     stages = allStages.filter((s) => s.kind === "stage").sort((a, b) => a.position - b.position);
@@ -87,8 +88,21 @@
     candidates = candRes.data || [];
     people = pplRes.data || [];
     teams = teamRes.data || [];
+    resources = resRes.data || [];
     if (!stages.length && perms.isAdmin) await seedDefaults();
+    if (!resources.length && perms.isAdmin) await seedResources();
     if (NOTIF_OK() && Notification.permission === "granted") startReminderLoop();
+  }
+
+  async function seedResources() {
+    const rows = [
+      { kind: "template", title: "First Contact", category: "Outreach", position: 1, body: "Hey {name}! It's ___ with CORE. Really enjoyed meeting you. I'd love to grab 15 min this week to show you what we're building — got some time Tue or Thu?" },
+      { kind: "template", title: "Follow Up", category: "Outreach", position: 2, body: "Hey {name}, circling back on this — still open to a quick meeting? I've got a couple slots this week that could work." },
+      { kind: "template", title: "Appointment Reminder", category: "Appointments", position: 3, body: "Looking forward to our meeting {day} at {time}! Shoot me a text if anything changes. — ___" },
+      { kind: "template", title: "No-Show Recovery", category: "Appointments", position: 4, body: "Hey {name}, we missed each other today — no worries, it happens! Want to find another time that works better for you?" },
+    ];
+    const { error } = await sb.from("resources").insert(rows);
+    if (!error) { const { data } = await sb.from("resources").select("*").order("position", { ascending: true }); resources = data || []; }
   }
 
   async function seedDefaults() {
@@ -157,13 +171,14 @@
   }
 
   function renderApp() {
-    const tabs = [["board", "Board"], ["list", "List"], ["tree", "Downline"], ["calendar", "Calendar"]];
+    const tabs = [["board", "Board"], ["list", "List"], ["tree", "Downline"], ["calendar", "Calendar"], ["resources", "Resources"]];
     if (perms.canManageStages) tabs.push(["settings", "Settings"]);
     let body = "";
     if (activeTab === "board") body = renderBoard();
     else if (activeTab === "list") body = renderList();
     else if (activeTab === "tree") body = renderTree();
     else if (activeTab === "calendar") body = renderCalendar();
+    else if (activeTab === "resources") body = renderResources();
     else if (activeTab === "settings") body = renderSettings();
 
     appRoot().innerHTML = `
@@ -182,6 +197,7 @@
     bindListEvents();
     bindTreeEvents();
     bindCalendarEvents();
+    bindResourcesEvents();
     bindSettingsEvents();
   }
 
@@ -305,6 +321,8 @@
 
   function renderModal() {
     if (modal.type === "candidate") return renderCandidateModal();
+    if (modal.type === "resource") return renderResourceModal();
+    if (modal.type === "present") return renderPresentModal();
   }
 
   function renderCandidateModal() {
@@ -398,6 +416,153 @@
     candidates = candidates.filter((c) => c.id !== id);
     closeModal();
     render();
+  }
+
+  // ── Resources (show a prospect + message templates) ─────────────
+  function embedFor(url) {
+    if (!url) return null;
+    let m;
+    if ((m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/))) return { type: "iframe", src: `https://www.youtube.com/embed/${m[1]}` };
+    if ((m = url.match(/vimeo\.com\/(\d+)/))) return { type: "iframe", src: `https://player.vimeo.com/video/${m[1]}` };
+    if ((m = url.match(/loom\.com\/share\/([\w-]+)/))) return { type: "iframe", src: `https://www.loom.com/embed/${m[1]}` };
+    if (/\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(url)) return { type: "img", src: url };
+    return { type: "link", src: url };
+  }
+
+  function renderResources() {
+    const links = resources.filter((r) => r.kind === "link");
+    const templates = resources.filter((r) => r.kind === "template");
+    return `
+      <div class="section-title"><h2>Resources</h2><span>show a prospect &amp; message templates</span></div>
+
+      <section class="card stack">
+        <div class="section-title"><h3>Show a Prospect</h3>${perms.isAdmin ? `<button class="blue tiny" id="addLink" type="button">+ Add</button>` : ""}</div>
+        ${links.length ? links.map((r) => `
+          <div class="res-card">
+            <div>
+              <div class="res-title">${esc(r.title)}</div>
+              ${r.body ? `<div class="muted">${esc(r.body)}</div>` : ""}
+              ${r.category ? `<span class="pill">${esc(r.category)}</span>` : ""}
+            </div>
+            <div class="row-inline">
+              <button class="blue tiny" data-present="${r.id}" type="button">Present</button>
+              ${r.url ? `<a class="secondary tiny" style="text-decoration:none;padding:5px 10px;border-radius:8px" href="${esc(r.url)}" target="_blank" rel="noopener">Open</a>` : ""}
+              ${perms.isAdmin ? `<button class="secondary tiny" data-edit-res="${r.id}" type="button">Edit</button>` : ""}
+            </div>
+          </div>`).join("") : `<p class="empty">No resources yet.${perms.isAdmin ? " Add a YouTube/Drive/Loom link to show recruits — no file storage used." : ""}</p>`}
+      </section>
+
+      <section class="card stack">
+        <div class="section-title"><h3>Message Templates</h3>${perms.isAdmin ? `<button class="blue tiny" id="addTemplate" type="button">+ Add</button>` : ""}</div>
+        ${templates.length ? templates.map((r) => `
+          <div class="res-card">
+            <div style="min-width:0">
+              <div class="res-title">${esc(r.title)}${r.category ? ` <span class="pill">${esc(r.category)}</span>` : ""}</div>
+              <div class="res-body">${esc(r.body)}</div>
+            </div>
+            <div class="row-inline">
+              <button class="blue tiny" data-copy="${r.id}" type="button">Copy</button>
+              <a class="secondary tiny" style="text-decoration:none;padding:5px 10px;border-radius:8px" href="sms:?&body=${encodeURIComponent(r.body || "")}">Text</a>
+              ${perms.isAdmin ? `<button class="secondary tiny" data-edit-res="${r.id}" type="button">Edit</button>` : ""}
+            </div>
+          </div>`).join("") : `<p class="empty">No templates yet.</p>`}
+      </section>
+      <p class="muted" style="text-align:center">Tip: <b>{name}</b>, <b>{day}</b>, <b>{time}</b> are placeholders — swap them in before sending.</p>`;
+  }
+
+  function bindResourcesEvents() {
+    if (activeTab !== "resources") return;
+    bind("#addLink", "click", () => openResourceModal(null, "link"));
+    bind("#addTemplate", "click", () => openResourceModal(null, "template"));
+    document.querySelectorAll("[data-edit-res]").forEach((b) => b.addEventListener("click", () => openResourceModal(b.dataset.editRes)));
+    document.querySelectorAll("[data-present]").forEach((b) => b.addEventListener("click", () => { modal = { type: "present", id: b.dataset.present }; render(); }));
+    document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+      const r = resources.find((x) => x.id === b.dataset.copy);
+      try { await navigator.clipboard.writeText(r.body || ""); b.textContent = "Copied!"; setTimeout(() => { b.textContent = "Copy"; }, 1500); } catch { alert(r.body); }
+    }));
+  }
+
+  function openResourceModal(id, kind) {
+    const r = id ? resources.find((x) => x.id === id) : { kind: kind || "link" };
+    modal = { type: "resource", r, isNew: !id };
+    render();
+  }
+
+  function renderPresentModal() {
+    const r = resources.find((x) => x.id === modal.id);
+    if (!r) { closeModal(); return; }
+    const emb = embedFor(r.url);
+    const overlay = document.createElement("div");
+    overlay.className = "modal-back present-back";
+    overlay.innerHTML = `
+      <div class="present">
+        <div class="present-head"><b>${esc(r.title)}</b><button class="secondary tiny" id="mClose" type="button">Close</button></div>
+        ${emb && emb.type === "iframe" ? `<div class="present-frame"><iframe src="${esc(emb.src)}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen frameborder="0"></iframe></div>`
+          : emb && emb.type === "img" ? `<div class="present-frame"><img src="${esc(emb.src)}" alt="${esc(r.title)}" /></div>`
+          : `<div class="present-empty"><p>${esc(r.body || "")}</p>${r.url ? `<a class="blue" style="text-decoration:none;padding:12px 18px;border-radius:10px" href="${esc(r.url)}" target="_blank" rel="noopener">Open Resource</a>` : `<p class="muted">No link set for this resource.</p>`}</div>`}
+        ${r.body && emb && emb.type !== "link" ? `<p class="muted">${esc(r.body)}</p>` : ""}
+      </div>`;
+    document.querySelectorAll(".modal-back").forEach((n) => n.remove());
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeModal(); });
+    bind("#mClose", "click", closeModal);
+  }
+
+  function renderResourceModal() {
+    const r = modal.r || {};
+    const isTemplate = r.kind === "template";
+    const overlay = document.createElement("div");
+    overlay.className = "modal-back";
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="section-title"><h3>${modal.isNew ? (isTemplate ? "New Template" : "New Resource") : "Edit"}</h3><button class="secondary tiny" id="mClose" type="button">Close</button></div>
+        <label>Title <input id="rTitle" value="${esc(r.title || "")}" /></label>
+        <label>Category <input id="rCategory" placeholder="${isTemplate ? "Outreach, Appointments..." : "Video, Deck, Website..."}" value="${esc(r.category || "")}" /></label>
+        ${isTemplate
+          ? `<label>Message <textarea id="rBody" style="min-height:120px">${esc(r.body || "")}</textarea></label>`
+          : `<label>Link (YouTube, Drive, Loom, website, image URL) <input id="rUrl" placeholder="https://youtu.be/..." value="${esc(r.url || "")}" /></label>
+             <label>Description <input id="rBody" value="${esc(r.body || "")}" /></label>`}
+        <div class="modal-actions">
+          <button class="blue" id="rSave" type="button">${modal.isNew ? "Add" : "Save"}</button>
+          ${!modal.isNew ? `<button class="danger" id="rDelete" type="button">Delete</button>` : ""}
+        </div>
+      </div>`;
+    document.querySelectorAll(".modal-back").forEach((n) => n.remove());
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeModal(); });
+    bind("#mClose", "click", closeModal);
+    bind("#rSave", "click", () => saveResource());
+    bind("#rDelete", "click", () => deleteResource(r.id));
+  }
+
+  async function saveResource() {
+    const r = modal.r;
+    const row = {
+      kind: r.kind,
+      title: val("#rTitle").trim(),
+      category: val("#rCategory").trim(),
+      body: (document.querySelector("#rBody") ? document.querySelector("#rBody").value.trim() : ""),
+      url: (document.querySelector("#rUrl") ? val("#rUrl").trim() : (r.url || "")),
+    };
+    if (!row.title) { alert("Title is required."); return; }
+    if (modal.isNew) {
+      row.position = (resources.reduce((m, x) => Math.max(m, x.position || 0), 0)) + 1;
+      const { data, error } = await sb.from("resources").insert(row).select().single();
+      if (error) { alert("Couldn't save: " + error.message); return; }
+      resources.push(data);
+    } else {
+      const { error } = await sb.from("resources").update(row).eq("id", r.id);
+      if (error) { alert("Couldn't save: " + error.message); return; }
+      Object.assign(r, row);
+    }
+    closeModal(); render();
+  }
+  async function deleteResource(id) {
+    if (!confirm("Delete this resource?")) return;
+    const { error } = await sb.from("resources").delete().eq("id", id);
+    if (error) { alert("Couldn't delete: " + error.message); return; }
+    resources = resources.filter((x) => x.id !== id);
+    closeModal(); render();
   }
 
   // ── Recruiting lineage tree ─────────────────────────────────────

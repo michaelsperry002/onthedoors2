@@ -272,3 +272,29 @@ h1, h2, h3,
   margin-left: 17px; padding-left: 14px;
   border-left: 2px solid var(--line);
 }
+
+/* ── Resources ── */
+.res-card {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 12px 0; border-top: 1px solid var(--line);
+}
+.res-card:first-of-type { border-top: none; }
+.res-title { font-weight: 800; font-size: 14.5px; letter-spacing: -0.01em; }
+.res-body { font-size: 13px; color: var(--slate); margin-top: 3px; white-space: pre-wrap;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.res-card .row-inline { flex: 0 0 auto; }
+
+/* present overlay — clean "show a prospect" view */
+.present-back { place-items: center !important; padding: 16px; }
+.present { width: 100%; max-width: 780px; background: var(--panel); border-radius: 18px; padding: 16px; display: grid; gap: 12px; max-height: 92vh; overflow-y: auto; }
+.present-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.present-head b { font-size: 18px; font-family: "Archivo", sans-serif; }
+.present-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
+.present-frame iframe, .present-frame img { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: contain; }
+.present-empty { display: grid; gap: 14px; place-items: center; text-align: center; padding: 40px 16px; }
+
+/* many tabs: let the bottom bar scroll instead of cramping on phones */
+@media (max-width: 640px) {
+  .tabs { justify-content: flex-start; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tabs button { flex: 0 0 auto; min-width: 68px; }
+}

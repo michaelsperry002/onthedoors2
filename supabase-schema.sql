@@ -313,6 +313,24 @@ create table if not exists candidates (
   updated_at timestamptz default now()
 );
 
+-- Recruiting resources: link cards (videos/decks reps show a prospect) and
+-- message templates. Text + URLs only — no uploaded files, so ~no storage.
+create table if not exists resources (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null default 'link' check (kind in ('link', 'template')),
+  title text not null,
+  body text default '',
+  url text default '',
+  category text default '',
+  position int not null default 0,
+  created_at timestamptz default now()
+);
+alter table resources enable row level security;
+drop policy if exists "Auth read resources" on resources;
+create policy "Auth read resources" on resources for select using (auth.uid() is not null);
+drop policy if exists "Admin writes resources" on resources;
+create policy "Admin writes resources" on resources for all using (is_admin()) with check (is_admin());
+
 alter table pipeline_stages enable row level security;
 alter table candidates enable row level security;
 
