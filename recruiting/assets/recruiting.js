@@ -157,7 +157,7 @@
   }
 
   function renderApp() {
-    const tabs = [["board", "Board"], ["list", "List"], ["tree", "Tree"], ["calendar", "Calendar"]];
+    const tabs = [["board", "Board"], ["list", "List"], ["tree", "Downline"], ["calendar", "Calendar"]];
     if (perms.canManageStages) tabs.push(["settings", "Settings"]);
     let body = "";
     if (activeTab === "board") body = renderBoard();
@@ -441,7 +441,7 @@
   function renderTree() {
     const total = downlineCount(profile.id);
     return `
-      <div class="section-title"><h2>Recruiting Tree</h2><span>${total} in your downline</span></div>
+      <div class="section-title"><h2>Downline</h2><span>${total} in your downline</span></div>
       <div class="toolbar">
         <button class="secondary tiny" id="treeExpand" type="button">Expand all</button>
         <button class="secondary tiny" id="treeCollapse" type="button">Collapse all</button>
