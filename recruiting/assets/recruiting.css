@@ -309,3 +309,13 @@ h1, h2, h3,
 
 /* Reserve scrollbar space so content never shifts sideways on load */
 html { scrollbar-gutter: stable; overflow-y: scroll; }
+
+/* ── Activity timeline + time-in-stage ── */
+.tag.time { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+.cand-card.stagnant { border-color: rgba(229, 72, 77, 0.4); box-shadow: 0 0 0 1px rgba(229,72,77,0.15); }
+.timeline { display: grid; gap: 2px; }
+.tl-item { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; }
+.tl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--core-blue); margin-top: 5px; flex: 0 0 auto; position: relative; }
+.tl-item:not(:last-child) .tl-dot::after { content: ""; position: absolute; left: 50%; top: 12px; width: 2px; height: calc(100% + 8px); background: var(--line); transform: translateX(-50%); }
+.tl-text { font-size: 13.5px; font-weight: 600; }
+.tl-meta { font-size: 11.5px; color: var(--muted); }

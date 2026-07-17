@@ -439,7 +439,7 @@
     const myRecruits = recruitsOf(profile).length;
 
     return `
-      <div class="section-title"><h2>Organization</h2><span>${teams.length} team${teams.length === 1 ? "" : "s"} · ${active.length} active</span></div>
+      <div class="section-title"><h2>Organization</h2>${perms.isAdmin ? `<button class="secondary" id="exportLogs" type="button" style="padding:6px 12px;font-size:13px">Export logs</button>` : `<span>${teams.length} teams · ${active.length} active</span>`}</div>
       <div class="range-chips" id="rangeChips">
         ${RANGES.map(([v, l]) => `<button data-range="${v}" class="${range === v ? "active" : ""}" type="button">${l}</button>`).join("")}
       </div>
@@ -725,7 +725,7 @@
     const teamName = (id) => (teams.find((t) => t.id === id) || {}).name || "No team";
     const rows = [...people].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return `
-      <div class="section-title"><h2>People</h2><span>${people.length} org-wide</span></div>
+      <div class="section-title"><h2>People</h2>${perms.isAdmin ? `<button class="secondary" id="exportPeople" type="button" style="padding:6px 12px;font-size:13px">Export CSV</button>` : `<span>${people.length} org-wide</span>`}</div>
       ${perms.canAdd ? `
       <section class="card stack">
         <div class="section-title"><h3>Add a Person</h3><span>creates their account instantly</span></div>
@@ -909,6 +909,9 @@
     bind("#kpiHourEnd", "change", (e) => { kpiHourEnd = Number(e.target.value); render(); });
     bind("#kpiDow", "change", (e) => { kpiDow = e.target.value; render(); });
     bind("#kpiResetFilters", "click", () => { kpiHourStart = 0; kpiHourEnd = 23; kpiDow = "all"; render(); });
+    // exports
+    bind("#exportLogs", "click", exportLogsCsv);
+    bind("#exportPeople", "click", exportPeopleCsv);
     // teams
     bind("#createTeam", "click", createTeam);
     document.querySelectorAll("[data-rename-team]").forEach((b) =>
@@ -1123,6 +1126,35 @@
     viewPersonId = null;
     flash = `${p.name} deleted.`;
     render();
+  }
+
+  // ── CSV export ──────────────────────────────────────────────────
+  function downloadCsv(filename, header, rows) {
+    const q = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+    const csv = [header.map(q).join(","), ...rows.map((r) => r.map(q).join(","))].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function exportPeopleCsv() {
+    const teamName = (id) => (teams.find((t) => t.id === id) || {}).name || "";
+    const rows = people.map((p) => {
+      const s = personStats(p.id, null);
+      return [p.name, ROLE_LABELS[p.role] || p.role, teamName(p.team_id), p.email || "", p.phone || "",
+        p.disabled ? "deactivated" : "active", s.doors, s.sales, Number.isFinite(s.closeRate) ? Math.round(s.closeRate) + "%" : "",
+        Math.round(s.revenue), p.recruited_by_name || "", p.created_at ? new Date(p.created_at).toLocaleDateString() : ""];
+    });
+    downloadCsv("core-people-" + dkey(new Date()) + ".csv",
+      ["Name", "Role", "Team", "Email", "Phone", "Status", "Doors", "Sales", "Close %", "Revenue", "Recruited by", "Joined"], rows);
+  }
+  function exportLogsCsv() {
+    const nameOf = (id) => (people.find((p) => p.id === id) || {}).name || "";
+    const teamName = (id) => (teams.find((t) => t.id === id) || {}).name || "";
+    const rows = [...logs].sort((a, b) => (a.date < b.date ? 1 : -1)).map((l) =>
+      [l.date, nameOf(l.user_id), teamName(l.team_id), l.outcome, Math.round(Number(l.contract_value || 0)),
+        l.created_at ? new Date(l.created_at).toLocaleTimeString() : ""]);
+    downloadCsv("core-logs-" + dkey(new Date()) + ".csv",
+      ["Date", "Rep", "Team", "Outcome", "Contract $", "Time"], rows);
   }
 
   init();

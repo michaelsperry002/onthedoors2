@@ -27,7 +27,7 @@
   // ── State ───────────────────────────────────────────────────────
   let session = null, profile = null, loading = true, authError = "";
   let activeTab = "board";
-  let stages = [], flags = [], candidates = [], people = [], teams = [], resources = [];
+  let stages = [], flags = [], candidates = [], people = [], teams = [], resources = [], events = [];
   let perms = {};
   let modal = null; // {type, ...}
   let filterText = "", filterStage = "all", filterFlag = "all", filterRecruiter = "all";
@@ -54,6 +54,47 @@
   const stageNamed = (re) => stages.find((s) => re.test(s.name));
   const flagNamed = (re) => flags.find((f) => re.test(f.name));
 
+  // ── Activity log + time-in-stage ────────────────────────────────
+  async function logEvent(candidateId, kind, extra) {
+    const row = { candidate_id: candidateId, kind, actor_id: profile.id, actor_name: profile.name, at: new Date().toISOString(), ...(extra || {}) };
+    events.unshift(row);
+    try { await sb.from("candidate_events").insert(row); } catch (e) { /* non-fatal */ }
+  }
+  function stageEnteredAt(c) {
+    const evs = events.filter((e) => e.candidate_id === c.id && e.kind === "stage").sort((a, b) => new Date(b.at) - new Date(a.at));
+    return evs.length ? evs[0].at : c.created_at;
+  }
+  function daysInStage(c) { return Math.max(0, Math.floor((Date.now() - new Date(stageEnteredAt(c)).getTime()) / 86400000)); }
+  function relTime(iso) {
+    const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return "just now";
+    const m = Math.floor(s / 60); if (m < 60) return m + "m ago";
+    const h = Math.floor(m / 60); if (h < 24) return h + "h ago";
+    const d = Math.floor(h / 24); if (d < 30) return d + "d ago";
+    return new Date(iso).toLocaleDateString();
+  }
+  function eventText(e) {
+    if (e.kind === "created") return "Added to pipeline";
+    if (e.kind === "stage") return `Moved to ${e.to_stage || "?"}`;
+    if (e.kind === "flag") return e.detail ? `Tagged “${e.detail}”` : "Tag cleared";
+    if (e.kind === "hired") return "Marked Ready / Hired";
+    return e.detail || e.kind;
+  }
+  function activityHtml(c) {
+    const evs = events.filter((e) => e.candidate_id === c.id).sort((a, b) => new Date(b.at) - new Date(a.at));
+    const dis = daysInStage(c);
+    return `
+      <hr class="divider" />
+      <div class="section-title"><h3>Activity</h3><span>${dis === 0 ? "entered stage today" : dis + " day" + (dis === 1 ? "" : "s") + " in this stage"}</span></div>
+      <div class="timeline">
+        ${evs.length ? evs.map((e) => `
+          <div class="tl-item">
+            <span class="tl-dot"></span>
+            <div><div class="tl-text">${esc(eventText(e))}</div><div class="tl-meta">${esc(relTime(e.at))}${e.actor_name ? " · " + esc(e.actor_name) : ""}</div></div>
+          </div>`).join("") : `<p class="muted">No activity recorded yet.</p>`}
+      </div>`;
+  }
+
   // ── Init / auth ─────────────────────────────────────────────────
   async function init() {
     render(); // branded splash immediately
@@ -76,12 +117,13 @@
   }
 
   async function loadAll() {
-    const [stageRes, candRes, pplRes, teamRes, resRes] = await Promise.all([
+    const [stageRes, candRes, pplRes, teamRes, resRes, evRes] = await Promise.all([
       sb.from("pipeline_stages").select("*").order("position", { ascending: true }),
       sb.from("candidates").select("*").order("created_at", { ascending: false }),
       sb.from("profiles").select("id,name,role,team_id,region_id,email,phone,recruited_by,recruited_by_name"),
       sb.from("teams").select("*"),
       sb.from("resources").select("*").order("position", { ascending: true }),
+      sb.from("candidate_events").select("*").order("at", { ascending: false }),
     ]);
     const allStages = stageRes.data || [];
     stages = allStages.filter((s) => s.kind === "stage").sort((a, b) => a.position - b.position);
@@ -90,6 +132,7 @@
     people = pplRes.data || [];
     teams = teamRes.data || [];
     resources = resRes.data || [];
+    events = evRes.data || [];
     if (!stages.length && perms.isAdmin) await seedDefaults();
     if (!resources.length && perms.isAdmin) await seedResources();
     if (NOTIF_OK() && Notification.permission === "granted") startReminderLoop();
@@ -217,17 +260,18 @@
       <div class="column" data-stage="${st.id}">
         <div class="column-head"><b>${esc(st.name)}${st.is_final ? " ✓" : ""}</b><span class="count">${cards.length}</span></div>
         <div class="column-body" data-drop="${st.id}">
-          ${cards.map((c) => `
-            <div class="cand-card" draggable="true" data-card="${c.id}">
+          ${cards.map((c) => { const dis = daysInStage(c); return `
+            <div class="cand-card ${!c.hired && dis >= 14 ? "stagnant" : ""}" draggable="true" data-card="${c.id}">
               <div class="top"><strong>${esc(c.name)}</strong>${c.flag_id ? `<span class="tag flag">${esc(flagName(c.flag_id))}</span>` : ""}</div>
               <div class="meta">
                 <span>${esc(nameOf(c.recruiter_id))}</span>
                 ${c.phone ? `<span>${esc(c.phone)}</span>` : ""}
+                ${!c.hired ? `<span class="tag ${dis >= 14 ? "due" : "time"}">${dis === 0 ? "today" : dis + "d in stage"}</span>` : ""}
                 ${c.appt_at ? `<span class="tag appt">📅 ${esc(fmtWhen(c.appt_at))}</span>` : ""}
                 ${overdue(c) ? `<span class="tag due">Due ${esc(c.follow_up_date)}</span>` : c.follow_up_date ? `<span>↺ ${esc(c.follow_up_date)}</span>` : ""}
               </div>
               <select class="move" data-move="${c.id}">${stageOpts(c.stage_id)}</select>
-            </div>`).join("") || `<p class="muted" style="padding:4px">No candidates</p>`}
+            </div>`; }).join("") || `<p class="muted" style="padding:4px">No candidates</p>`}
         </div>
       </div>`;
     }).join("");
@@ -272,11 +316,14 @@
   async function moveCandidate(id, stageId) {
     const c = candidates.find((x) => x.id === id);
     if (!c || !canEditCandidate(c)) { alert("You can't move this candidate."); render(); return; }
+    const fromName = (stageOf(c) || {}).name || "";
     const stage = stages.find((s) => s.id === stageId);
+    if (stage && stage.id === c.stage_id) return; // no-op
     const hired = !!(stage && stage.is_final);
     c.stage_id = stageId; c.hired = hired; c.updated_at = new Date().toISOString();
     const { error } = await sb.from("candidates").update({ stage_id: stageId, hired, updated_at: c.updated_at }).eq("id", id);
     if (error) alert("Couldn't move: " + error.message);
+    else logEvent(id, "stage", { from_stage: fromName, to_stage: (stage || {}).name || "" });
     // Moving into a "Meeting Set" stage without a time? Open the card to set one.
     if (isMeetingStage(stage) && !c.appt_at) { openCandidateModal(id); return; }
     render();
@@ -296,7 +343,7 @@
         <select id="fRecruiter"><option value="all">All recruiters</option>${people.map((p) => `<option value="${p.id}" ${filterRecruiter === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
       </div>
       <section class="card">
-        <div class="section-title"><h2>Candidates</h2><span>${list.length}</span></div>
+        <div class="section-title"><h2>Candidates</h2><button class="secondary tiny" id="exportCandidates" type="button">Export CSV</button></div>
         ${list.map((c) => `
           <div class="list-row" data-open="${c.id}">
             <div class="top"><strong>${esc(c.name)}</strong><span class="pill ${c.hired ? "" : ""}">${esc(stageName(c.stage_id))}</span></div>
@@ -313,6 +360,27 @@
     bind("#fFlag", "change", (e) => { filterFlag = e.target.value; render(); });
     bind("#fRecruiter", "change", (e) => { filterRecruiter = e.target.value; render(); });
     document.querySelectorAll("[data-open]").forEach((el) => el.addEventListener("click", () => openCandidateModal(el.dataset.open)));
+    bind("#exportCandidates", "click", exportCandidatesCsv);
+  }
+
+  function downloadCsv(filename, header, rows) {
+    const q = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+    const csv = [header.map(q).join(","), ...rows.map((r) => r.map(q).join(","))].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function exportCandidatesCsv() {
+    const stageName = (id) => (stages.find((s) => s.id === id) || {}).name || "";
+    const flagName = (id) => (flags.find((f) => f.id === id) || {}).name || "";
+    const rows = visibleCandidates().map((c) => [
+      c.name, c.phone, c.email, c.source, stageName(c.stage_id), flagName(c.flag_id),
+      nameOf(c.recruiter_id), teamName(c.team_id), daysInStage(c), c.follow_up_date || "",
+      c.appt_at ? new Date(c.appt_at).toLocaleString() : "", c.hired ? "yes" : "", (c.notes || "").replace(/\r?\n/g, " "),
+      c.created_at ? new Date(c.created_at).toLocaleDateString() : "",
+    ]);
+    downloadCsv("core-candidates-" + todayKey() + ".csv",
+      ["Name", "Phone", "Email", "Source", "Stage", "Tag", "Recruiter", "Team", "Days in stage", "Follow-up", "Appointment", "Hired", "Notes", "Added"], rows);
   }
 
   // ── Candidate modal (add / edit) ────────────────────────────────
@@ -363,6 +431,7 @@
           ${!isNew && stage && stage.is_final && perms.isAdmin ? `<button class="secondary" id="mToCore" type="button">Open CORE to add account</button>` : ""}
           ${!isNew && editable ? `<button class="danger" id="mDelete" type="button">Delete</button>` : ""}
         </div>
+        ${!isNew ? activityHtml(c) : ""}
       </div>`;
     // replace any existing overlay
     document.querySelectorAll(".modal-back").forEach((n) => n.remove());
@@ -405,9 +474,15 @@
       const { data, error } = await sb.from("candidates").insert(row).select().single();
       if (error) { alert("Couldn't add: " + error.message); return; }
       candidates.unshift(data);
+      logEvent(data.id, "created", { to_stage: (stage || {}).name || "" });
     } else {
+      const prevStage = modal.c.stage_id;
       const { error } = await sb.from("candidates").update(row).eq("id", modal.c.id);
       if (error) { alert("Couldn't save: " + error.message); return; }
+      if (prevStage !== row.stage_id) {
+        const fromName = (stages.find((s) => s.id === prevStage) || {}).name || "";
+        logEvent(modal.c.id, "stage", { from_stage: fromName, to_stage: (stage || {}).name || "" });
+      }
       Object.assign(modal.c, row);
     }
     closeModal();

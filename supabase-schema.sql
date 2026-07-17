@@ -331,6 +331,25 @@ create policy "Auth read resources" on resources for select using (auth.uid() is
 drop policy if exists "Admin writes resources" on resources;
 create policy "Admin writes resources" on resources for all using (is_admin()) with check (is_admin());
 
+-- Candidate activity log: a timestamped history per candidate (added,
+-- stage moves, tags, hired) that also powers "time in stage".
+create table if not exists candidate_events (
+  id uuid primary key default gen_random_uuid(),
+  candidate_id uuid references candidates(id) on delete cascade,
+  kind text not null,
+  detail text default '',
+  from_stage text default '',
+  to_stage text default '',
+  actor_id uuid references profiles(id),
+  actor_name text default '',
+  at timestamptz default now()
+);
+alter table candidate_events enable row level security;
+drop policy if exists "Auth read events" on candidate_events;
+create policy "Auth read events" on candidate_events for select using (auth.uid() is not null);
+drop policy if exists "Auth insert events" on candidate_events;
+create policy "Auth insert events" on candidate_events for insert with check (auth.uid() is not null);
+
 alter table pipeline_stages enable row level security;
 alter table candidates enable row level security;
 

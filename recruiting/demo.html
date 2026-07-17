@@ -37,7 +37,15 @@
           { id: "r3", kind: "template", title: "First Contact", body: "Hey {name}! It's ___ with CORE. Loved meeting you — got 15 min this week?", category: "Outreach", position: 3 },
           { id: "r4", kind: "template", title: "Follow Up", body: "Hey {name}, circling back — still open to a quick meeting? Tue or Thu work?", category: "Outreach", position: 4 },
         ];
-        const STORE = { pipeline_stages: stages, candidates, profiles, teams, resources };
+        const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString();
+        const candidate_events = [
+          { id: "e1", candidate_id: "c1", kind: "created", to_stage: "Interested", actor_name: "Michael Sperry", at: daysAgo(20) },
+          { id: "e2", candidate_id: "c2", kind: "created", to_stage: "Interested", actor_name: "Sam Patel", at: daysAgo(18) },
+          { id: "e3", candidate_id: "c2", kind: "stage", from_stage: "Interested", to_stage: "1st Meeting Set", actor_name: "Sam Patel", at: daysAgo(3) },
+          { id: "e4", candidate_id: "c3", kind: "created", to_stage: "Interested", actor_name: "Michael Sperry", at: daysAgo(40) },
+          { id: "e5", candidate_id: "c3", kind: "stage", from_stage: "Interested", to_stage: "Docs Sent", actor_name: "Michael Sperry", at: daysAgo(30) },
+        ];
+        const STORE = { pipeline_stages: stages, candidates, profiles, teams, resources, candidate_events };
 
         function makeBuilder(table) {
           const op = { filters: {}, single: false, insertRow: null, updatePatch: null, del: false };
