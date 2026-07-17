@@ -112,6 +112,7 @@
   }
 
   async function init() {
+    render(); // show the branded splash immediately, before data loads
     const { data } = await sb.auth.getSession();
     session = data ? data.session : null;
     if (session) await afterLogin();
@@ -339,13 +340,17 @@
   }
 
   // ── Rendering ───────────────────────────────────────────────────
+  let firstAppPaint = true;
   function render() {
     if (loading) {
-      appRoot().innerHTML = `<main class="screen"><section class="auth-card"><div class="brand"><small>CORE</small><h1>Loading...</h1></div></section></main>`;
+      appRoot().innerHTML = `<main class="screen"><div class="splash"><img src="favicon.svg" alt="CORE" /></div></main>`;
       return;
     }
     if (!session || !profile) return renderAuth();
     renderApp();
+    // Fade the whole app in once, on first paint (opacity only, so sticky
+    // headers keep working). Later re-renders are instant.
+    if (firstAppPaint) { firstAppPaint = false; appRoot().classList.add("app-enter"); }
   }
 
   function renderAuth() {

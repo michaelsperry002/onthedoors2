@@ -381,3 +381,17 @@ h1, h2, h3,
   .tabs button.active { background: transparent; color: var(--core-blue); font-weight: 800; position: relative; }
   .tabs button.active::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--core-blue); }
 }
+
+/* ── Smooth load: branded splash + one-time fade-in ── */
+.splash { display: grid; place-items: center; min-height: 100vh; }
+.splash img { width: 64px; height: 64px; border-radius: 16px; animation: splashPulse 1.1s ease-in-out infinite; }
+@keyframes splashPulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1); }
+}
+#app.app-enter { animation: coreFadeIn 0.32s ease both; }
+@keyframes coreFadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .splash img, #app.app-enter { animation: none; }
+}

@@ -56,6 +56,7 @@
 
   // ── Init / auth ─────────────────────────────────────────────────
   async function init() {
+    render(); // branded splash immediately
     const { data } = await sb.auth.getSession();
     session = data ? data.session : null;
     if (session) await afterLogin();
@@ -134,10 +135,12 @@
   }
 
   // ── Render ──────────────────────────────────────────────────────
+  let firstAppPaint = true;
   function render() {
-    if (loading) { appRoot().innerHTML = `<main class="screen"><section class="auth-card"><div class="brand"><small>CORE RECRUITING</small><h1>Loading...</h1></div></section></main>`; return; }
+    if (loading) { appRoot().innerHTML = `<main class="screen"><div class="splash"><img src="favicon.svg" alt="CORE Recruiting" /></div></main>`; return; }
     if (!session || !profile) return renderAuth();
     renderApp();
+    if (firstAppPaint) { firstAppPaint = false; appRoot().classList.add("app-enter"); }
     if (modal) renderModal();
   }
 

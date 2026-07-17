@@ -319,14 +319,16 @@
   // ── Render ──────────────────────────────────────────────────────
   function appRoot() { return document.querySelector("#app"); }
 
+  let firstAppPaint = true;
   function render() {
     if (loading) {
-      appRoot().innerHTML = `<main class="screen"><section class="auth-card"><div class="brand"><small>CORE KPI</small><h1>Loading...</h1></div></section></main>`;
+      appRoot().innerHTML = `<main class="screen"><div class="splash"><img src="favicon.svg" alt="CORE KPI" /></div></main>`;
       return;
     }
     if (!session || !profile) return renderAuth();
     renderApp();
     animateBars();
+    if (firstAppPaint) { firstAppPaint = false; appRoot().classList.add("app-enter"); }
   }
 
   // Bars render at width:0 then animate to their real percentage on the
