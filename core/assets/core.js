@@ -5,10 +5,19 @@
   const SUPABASE_URL = "https://tpzfmnyrqsqewgtkpxie.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_hgsd7UGGL2EjqVM875LzKA_fqjFgwbW";
 
+  // Shared session across CORE KPI / CORE / Recruiting (same origin), with
+  // a "Remember me" flag (default on) choosing localStorage vs sessionStorage.
+  const REMEMBER_KEY = "core.remember";
+  const remembered = () => localStorage.getItem(REMEMBER_KEY) !== "0";
+  const authStorage = {
+    getItem(k) { return (remembered() ? localStorage : sessionStorage).getItem(k) || localStorage.getItem(k) || sessionStorage.getItem(k); },
+    setItem(k, v) { (remembered() ? localStorage : sessionStorage).setItem(k, v); },
+    removeItem(k) { localStorage.removeItem(k); sessionStorage.removeItem(k); },
+  };
   const sb = window.__CORE_MOCK_SB
     ? window.__CORE_MOCK_SB
     : window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { storageKey: "core-admin-auth" },
+        auth: { storage: authStorage, storageKey: "core-auth", persistSession: true, autoRefreshToken: true },
       });
 
   // Keep bandwidth bounded as history grows: only fetch logs from a
@@ -162,6 +171,8 @@
 
   async function signIn() {
     authError = "";
+    const rememberEl = $("#remember");
+    localStorage.setItem(REMEMBER_KEY, (rememberEl ? rememberEl.checked : true) ? "1" : "0");
     const email = val("#email").trim();
     const password = val("#password");
     const btn = $("#signInBtn");
@@ -350,6 +361,7 @@
           ${authError ? `<p class="auth-error">${escapeHtml(authError)}</p>` : ""}
           <label>Email <input id="email" type="email" autocomplete="username" /></label>
           <label>Password <input id="password" type="password" autocomplete="current-password" /></label>
+          <label class="remember-row"><input type="checkbox" id="remember" ${remembered() ? "checked" : ""} /> <span>Remember me on this device</span></label>
           <button id="signInBtn" class="primary" type="button">Sign In</button>
         </section>
       </main>`;

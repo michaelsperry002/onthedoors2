@@ -352,3 +352,32 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(30, 79, 2
 @media (max-width: 400px) {
   .topbar small { display: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   VISUAL REFINEMENT  — brand typeface, elevation, active accents
+   ════════════════════════════════════════════════════════════════ */
+h1, h2, h3,
+.section-title h2, .section-title h3,
+.topbar h1, .brand h1,
+.stat strong, .chip strong,
+.temp-pass-box code {
+  font-family: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.02em;
+}
+.stat strong, .chip strong { font-weight: 800; }
+
+/* softer, layered elevation */
+.card { box-shadow: 0 1px 2px rgba(20,33,61,0.04), 0 10px 30px -12px rgba(20,33,61,0.16); }
+.stat { box-shadow: 0 1px 2px rgba(20,33,61,0.04), 0 6px 18px -10px rgba(20,33,61,0.12); }
+
+/* remember-me row */
+.remember-row { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; font-size: 13px; color: var(--slate); font-weight: 600; cursor: pointer; }
+.remember-row input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--core-blue); }
+
+/* cleaner active tab accents */
+.tabs button.active { color: var(--ink); }
+@media (max-width: 640px) {
+  .tabs button { color: var(--muted); }
+  .tabs button.active { background: transparent; color: var(--core-blue); font-weight: 800; position: relative; }
+  .tabs button.active::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--core-blue); }
+}

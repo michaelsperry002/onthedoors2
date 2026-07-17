@@ -5,7 +5,20 @@
   const SUPABASE_URL = "https://tpzfmnyrqsqewgtkpxie.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_hgsd7UGGL2EjqVM875LzKA_fqjFgwbW";
 
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // ── Session persistence ─────────────────────────────────────────
+  // One shared session key across CORE KPI, CORE, and Recruiting so a
+  // single sign-in covers all three. "Remember me" (default on) keeps
+  // you signed in via localStorage; off = this-session-only.
+  const REMEMBER_KEY = "core.remember";
+  const remembered = () => localStorage.getItem(REMEMBER_KEY) !== "0";
+  const authStorage = {
+    getItem(k) { return (remembered() ? localStorage : sessionStorage).getItem(k) || localStorage.getItem(k) || sessionStorage.getItem(k); },
+    setItem(k, v) { (remembered() ? localStorage : sessionStorage).setItem(k, v); },
+    removeItem(k) { localStorage.removeItem(k); sessionStorage.removeItem(k); },
+  };
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { storage: authStorage, storageKey: "core-auth", persistSession: true, autoRefreshToken: true },
+  });
 
   // ── Constants ───────────────────────────────────────────────────
   const CACHE_KEY = "corekpis.cache.v1";
@@ -357,6 +370,7 @@
             <label>Email <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" value="${escapeAttr(authDraft.email)}" /></label>
             ${passwordFieldHtml("authPassword", "Password", isLogin ? "current-password" : "new-password")}
             ${isJoin ? passwordFieldHtml("authPasswordConfirm", "Confirm Password", "new-password") : ""}
+            <label class="remember-row"><input type="checkbox" id="authRemember" ${remembered() ? "checked" : ""} /> <span>Remember me on this device</span></label>
             <p id="authError" class="error">${escapeHtml(authError)}</p>
             <button id="authSubmit" class="primary" type="button">
               ${isLogin ? "Sign In" : "Join Team"}
@@ -381,6 +395,9 @@
     bind("#authSubmit", "click", async () => {
       const email = val("#authEmail").trim();
       const password = val("#authPassword");
+      // Persist the remember choice before establishing the session.
+      const rememberEl = document.querySelector("#authRemember");
+      localStorage.setItem(REMEMBER_KEY, (rememberEl ? rememberEl.checked : true) ? "1" : "0");
 
       if (isLogin) {
         authDraft.email = email;

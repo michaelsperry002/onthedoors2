@@ -1259,3 +1259,12 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(30, 79, 2
 @media (max-width: 560px) {
   .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ── Visual refinement: brand typeface + remember row ── */
+h1, h2, h3, .stat-card strong, .quick-card strong {
+  font-family: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.02em;
+}
+.remember-row { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.remember-row input { width: 18px; height: 18px; accent-color: var(--primary); }
+.nav-btn.active { color: var(--primary); font-weight: 800; }

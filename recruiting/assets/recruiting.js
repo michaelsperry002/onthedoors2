@@ -6,9 +6,20 @@
   const SUPABASE_ANON_KEY = "sb_publishable_hgsd7UGGL2EjqVM875LzKA_fqjFgwbW";
   const CORE_URL = "/core/";
 
+  // Shared session across CORE KPI / CORE / Recruiting, with a "Remember me"
+  // flag (default on) selecting localStorage vs sessionStorage.
+  const REMEMBER_KEY = "core.remember";
+  const remembered = () => localStorage.getItem(REMEMBER_KEY) !== "0";
+  const authStorage = {
+    getItem(k) { return (remembered() ? localStorage : sessionStorage).getItem(k) || localStorage.getItem(k) || sessionStorage.getItem(k); },
+    setItem(k, v) { (remembered() ? localStorage : sessionStorage).setItem(k, v); },
+    removeItem(k) { localStorage.removeItem(k); sessionStorage.removeItem(k); },
+  };
   const sb = window.__REC_MOCK_SB
     ? window.__REC_MOCK_SB
-    : window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storageKey: "core-recruiting-auth" } });
+    : window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { storage: authStorage, storageKey: "core-auth", persistSession: true, autoRefreshToken: true },
+      });
 
   const DEFAULT_STAGES = ["Interested", "Contacted", "1st Meeting Set", "1st Meeting Sat", "2nd Meeting Set", "2nd Meeting Sat", "Docs Sent", "Docs Signed", "Ready to Sell/Train"];
   const DEFAULT_FLAGS = ["Needs More Info", "Needs Another Meeting", "Thinking It Over", "Stagnant"];
@@ -86,6 +97,8 @@
 
   async function signIn() {
     authError = "";
+    const rememberEl = $("#remember");
+    localStorage.setItem(REMEMBER_KEY, (rememberEl ? rememberEl.checked : true) ? "1" : "0");
     const btn = $("#signInBtn");
     if (btn) { btn.disabled = true; btn.textContent = "Signing in..."; }
     const { data, error } = await sb.auth.signInWithPassword({ email: val("#email").trim(), password: val("#password") });
@@ -118,6 +131,7 @@
         ${authError ? `<p class="auth-error">${esc(authError)}</p>` : ""}
         <label>Email <input id="email" type="email" autocomplete="username" /></label>
         <label>Password <input id="password" type="password" autocomplete="current-password" /></label>
+        <label class="remember-row"><input type="checkbox" id="remember" ${remembered() ? "checked" : ""} /> <span>Remember me on this device</span></label>
         <button id="signInBtn" class="primary" type="button">Sign In</button>
       </section></main>`;
     bind("#signInBtn", "click", signIn);
