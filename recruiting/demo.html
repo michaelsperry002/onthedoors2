@@ -13,8 +13,12 @@
         const teams = [{ id: "t1", name: "Desert Hawks", short_code: "HAWK22" }, { id: "t2", name: "Valley Wolves", short_code: "WOLF88" }];
         const profiles = [
           { id: ME, team_id: "t1", region_id: "r1", role: AS, name: "Michael Sperry", email: "m@x.com" },
-          { id: "u1", team_id: "t1", region_id: "r1", role: "manager", name: "Sam Patel", email: "sam@x.com" },
-          { id: "u2", team_id: "t2", region_id: "r1", role: "rep", name: "Maria Lopez", email: "maria@x.com" },
+          { id: "u1", team_id: "t1", region_id: "r1", role: "manager", name: "Sam Patel", email: "sam@x.com", recruited_by: ME, recruited_by_name: "Michael Sperry" },
+          { id: "u2", team_id: "t2", region_id: "r1", role: "rep", name: "Maria Lopez", email: "maria@x.com", recruited_by: "u1", recruited_by_name: "Sam Patel" },
+          { id: "u6", team_id: "t1", region_id: "r1", role: "rep", name: "Tyler Nguyen", email: "tyler@x.com", recruited_by: "u1", recruited_by_name: "Sam Patel" },
+          { id: "u7", team_id: "t2", region_id: "r1", role: "rep", name: "Priya Shah", email: "priya@x.com", recruited_by: "u2", recruited_by_name: "Maria Lopez" },
+          { id: "u8", team_id: "t1", region_id: "r1", role: "regional", name: "Alex Rivera", email: "alex@x.com", recruited_by: ME, recruited_by_name: "Michael Sperry" },
+          { id: "u9", team_id: "t2", region_id: "r1", role: "rep", name: "Noah Kim", email: "noah@x.com", recruited_by: "u8", recruited_by_name: "Alex Rivera" },
         ];
         const S = ["Interested", "Contacted", "1st Meeting Set", "1st Meeting Sat", "2nd Meeting Set", "2nd Meeting Sat", "Docs Sent", "Docs Signed", "Ready to Sell/Train"];
         const F = ["Needs More Info", "Needs Another Meeting", "Thinking It Over", "Stagnant"];

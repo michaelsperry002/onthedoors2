@@ -31,6 +31,9 @@
   let perms = {};
   let modal = null; // {type, ...}
   let filterText = "", filterStage = "all", filterFlag = "all", filterRecruiter = "all";
+  let treeCollapsed = new Set(); // node ids collapsed in the tree view
+
+  const ROLE_LABEL = { admin: "Owner", regional: "Regional", manager: "Manager", rep: "Rep" };
 
   const appRoot = () => document.getElementById("app");
   const $ = (s) => document.querySelector(s);
@@ -75,7 +78,7 @@
     const [stageRes, candRes, pplRes, teamRes] = await Promise.all([
       sb.from("pipeline_stages").select("*").order("position", { ascending: true }),
       sb.from("candidates").select("*").order("created_at", { ascending: false }),
-      sb.from("profiles").select("id,name,role,team_id,region_id,email,phone"),
+      sb.from("profiles").select("id,name,role,team_id,region_id,email,phone,recruited_by,recruited_by_name"),
       sb.from("teams").select("*"),
     ]);
     const allStages = stageRes.data || [];
@@ -154,11 +157,12 @@
   }
 
   function renderApp() {
-    const tabs = [["board", "Board"], ["list", "List"], ["calendar", "Calendar"]];
+    const tabs = [["board", "Board"], ["list", "List"], ["tree", "Tree"], ["calendar", "Calendar"]];
     if (perms.canManageStages) tabs.push(["settings", "Settings"]);
     let body = "";
     if (activeTab === "board") body = renderBoard();
     else if (activeTab === "list") body = renderList();
+    else if (activeTab === "tree") body = renderTree();
     else if (activeTab === "calendar") body = renderCalendar();
     else if (activeTab === "settings") body = renderSettings();
 
@@ -169,13 +173,14 @@
       </header>
       <nav class="tabs">${tabs.map(([id, l]) => `<button data-tab="${id}" class="${activeTab === id ? "active" : ""}" type="button">${l}</button>`).join("")}</nav>
       <main class="wrap">${body}</main>
-      ${activeTab !== "settings" && activeTab !== "calendar" ? `<button class="fab" id="addCandidate" type="button" aria-label="Add candidate"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>` : ""}`;
+      ${["board", "list"].includes(activeTab) ? `<button class="fab" id="addCandidate" type="button" aria-label="Add candidate"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>` : ""}`;
 
     bind("#signOut", "click", async () => { await sb.auth.signOut(); session = null; profile = null; render(); });
     document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { activeTab = b.dataset.tab; render(); }));
     bind("#addCandidate", "click", () => openCandidateModal(null));
     bindBoardEvents();
     bindListEvents();
+    bindTreeEvents();
     bindCalendarEvents();
     bindSettingsEvents();
   }
@@ -393,6 +398,72 @@
     candidates = candidates.filter((c) => c.id !== id);
     closeModal();
     render();
+  }
+
+  // ── Recruiting lineage tree ─────────────────────────────────────
+  // Children = people this person directly recruited (by id link, or by
+  // name as a fallback for accounts created before the id link existed).
+  function childrenOf(id, name) {
+    return people
+      .filter((p) => p.id !== id && (p.recruited_by === id || (!p.recruited_by && p.recruited_by_name && name && p.recruited_by_name === name)))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  }
+  function downlineCount(id, seen) {
+    seen = seen || new Set();
+    const name = (people.find((p) => p.id === id) || {}).name;
+    let n = 0;
+    childrenOf(id, name).forEach((k) => { if (!seen.has(k.id)) { seen.add(k.id); n += 1 + downlineCount(k.id, seen); } });
+    return n;
+  }
+  function treeNode(p, seen) {
+    if (seen.has(p.id)) return "";
+    seen.add(p.id);
+    const kids = childrenOf(p.id, p.name);
+    const collapsed = treeCollapsed.has(p.id);
+    const total = downlineCount(p.id);
+    const isMe = p.id === profile.id;
+    return `
+      <div class="tree-node">
+        <div class="tree-row ${isMe ? "me" : ""}" ${kids.length ? `data-tree-toggle="${p.id}"` : ""}>
+          <span class="tree-caret ${kids.length ? (collapsed ? "" : "open") : "leaf"}">${kids.length ? "▸" : "•"}</span>
+          <div class="tree-card">
+            <div class="tree-name">${esc(p.name)}${isMe ? " (you)" : ""}</div>
+            <div class="tree-meta">
+              <span class="pill">${esc(ROLE_LABEL[p.role] || p.role)}</span>
+              ${kids.length ? `<span>${kids.length} direct</span>` : ""}
+              ${total ? `<span>${total} total</span>` : ""}
+            </div>
+          </div>
+        </div>
+        ${kids.length && !collapsed ? `<div class="tree-children">${kids.map((k) => treeNode(k, seen)).join("")}</div>` : ""}
+      </div>`;
+  }
+  function renderTree() {
+    const total = downlineCount(profile.id);
+    return `
+      <div class="section-title"><h2>Recruiting Tree</h2><span>${total} in your downline</span></div>
+      <div class="toolbar">
+        <button class="secondary tiny" id="treeExpand" type="button">Expand all</button>
+        <button class="secondary tiny" id="treeCollapse" type="button">Collapse all</button>
+      </div>
+      <section class="card tree-wrap">
+        ${treeNode(profile, new Set())}
+      </section>
+      <p class="muted" style="text-align:center;margin-top:4px">Built from who recruited whom. Set a person's recruiter in CORE (People) or when adding a candidate.</p>`;
+  }
+  function bindTreeEvents() {
+    if (activeTab !== "tree") return;
+    document.querySelectorAll("[data-tree-toggle]").forEach((el) => el.addEventListener("click", () => {
+      const id = el.dataset.treeToggle;
+      if (treeCollapsed.has(id)) treeCollapsed.delete(id); else treeCollapsed.add(id);
+      render();
+    }));
+    bind("#treeExpand", "click", () => { treeCollapsed = new Set(); render(); });
+    bind("#treeCollapse", "click", () => {
+      // collapse everyone who has children, except the root
+      treeCollapsed = new Set(people.filter((p) => p.id !== profile.id && childrenOf(p.id, p.name).length).map((p) => p.id));
+      render();
+    });
   }
 
   // ── Calendar + reminders ────────────────────────────────────────

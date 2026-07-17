@@ -246,3 +246,29 @@ h1, h2, h3,
   .tabs button.active { background: transparent; color: var(--core-blue); font-weight: 800; position: relative; }
   .tabs button.active::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--core-blue); }
 }
+
+/* ── Recruiting lineage tree ── */
+.tree-wrap { padding: 14px 12px; overflow-x: auto; }
+.tree-node { position: relative; }
+.tree-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 4px; cursor: default;
+  border-radius: 10px; transition: background 0.15s ease;
+}
+.tree-row[data-tree-toggle] { cursor: pointer; }
+@media (hover: hover) { .tree-row[data-tree-toggle]:hover { background: var(--panel-2); } }
+.tree-caret {
+  flex: 0 0 auto; width: 18px; text-align: center; color: var(--muted);
+  font-size: 12px; transition: transform 0.18s ease; user-select: none;
+}
+.tree-caret.open { transform: rotate(90deg); }
+.tree-caret.leaf { color: var(--core-blue); font-size: 14px; }
+.tree-card { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tree-name { font-weight: 800; font-size: 14.5px; letter-spacing: -0.01em; }
+.tree-row.me .tree-name { color: var(--core-blue); }
+.tree-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--muted); font-weight: 600; }
+.tree-meta .pill { padding: 1px 8px; font-size: 10.5px; }
+/* indented children with a connector line */
+.tree-children {
+  margin-left: 17px; padding-left: 14px;
+  border-left: 2px solid var(--line);
+}
