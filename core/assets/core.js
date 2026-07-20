@@ -599,13 +599,12 @@
       </section>`;
   }
 
-  function renderKpiPerson() {
-    const p = people.find((x) => x.id === kpiPersonId);
-    if (!p) { kpiPersonId = null; return renderKpiList(); }
+  // Full analytics body for one person over the current KPI filters. Shared by
+  // the KPIs tab and the People-tab person detail so both show identical depth.
+  function personKpiBody(p) {
     const rows = applyTimeFilters(rowsInRange(logs, kpiRange, kpiFrom, kpiTo).filter((r) => r.user_id === p.id));
     const a = personAnalytics(rows);
     const ser = seriesFor(rows, kpiRange, kpiFrom, kpiTo);
-    const teamName = (id) => (teams.find((t) => t.id === id) || {}).name || "No team";
     // Only chart the hours inside the selected window.
     const hStart = Math.min(kpiHourStart, kpiHourEnd), hEnd = Math.max(kpiHourStart, kpiHourEnd);
     const hourIdx = a.hours.map((_, h) => h).filter((h) => h >= hStart && h <= hEnd);
@@ -616,10 +615,6 @@
     const avgSale = a.sales ? a.revenue / a.sales : 0;
 
     return `
-      <button class="back-link" id="backToKpis" type="button">&larr; All people</button>
-      <div class="section-title"><h2>${escapeHtml(p.name)}</h2><span>${escapeHtml(teamName(p.team_id))} · ${escapeHtml(ROLE_LABELS[p.role] || p.role)}</span></div>
-      ${kpiRangeUI()}
-      ${kpiFilterUI()}
       ${timeFiltersActive() ? `<p class="muted" style="text-align:center">Showing ${hourLabelAmPm(hStart)}–${hourLabelAmPm(hEnd)}${kpiDow !== "all" ? " · " + (["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][kpiDow] || kpiDow) : ""} only</p>` : ""}
 
       <div class="stat-grid">
@@ -674,8 +669,18 @@
       <section class="card stack">
         <div class="section-title"><h3>Sales by weekday</h3><span>weekly pattern</span></div>
         ${barsHtml(a.dows.map((b) => b.sales), DOW, { color: "var(--slate)" })}
-      </section>
+      </section>`;
+  }
 
+  function renderKpiPerson() {
+    const p = people.find((x) => x.id === kpiPersonId);
+    if (!p) { kpiPersonId = null; return renderKpiList(); }
+    return `
+      <button class="back-link" id="backToKpis" type="button">&larr; All people</button>
+      <div class="section-title"><h2>${escapeHtml(p.name)}</h2><span>${escapeHtml(ROLE_LABELS[p.role] || p.role)}</span></div>
+      ${kpiRangeUI()}
+      ${kpiFilterUI()}
+      ${personKpiBody(p)}
       <p class="muted" style="text-align:center">To edit this person's numbers or info, use the <b>People</b> tab.</p>`;
   }
 
@@ -834,9 +839,6 @@
   function renderPersonDetail() {
     const p = people.find((x) => x.id === viewPersonId);
     if (!p) { viewPersonId = null; return renderPeople(); }
-    const all = personStats(p.id, null);
-    const week = personStats(p.id, weekAgoKey());
-    const ser = seriesFor(logs.filter((l) => l.user_id === p.id), "30");
 
     const byDay = {};
     logs.filter((l) => l.user_id === p.id).forEach((l) => {
@@ -852,17 +854,9 @@
     return `
       <button class="back-link" id="backToPeople" type="button">&larr; All people</button>
       <div class="section-title"><h2>${escapeHtml(p.name)}</h2><span>${escapeHtml(ROLE_LABELS[p.role] || p.role)}</span></div>
-      <div class="stat-grid">
-        <div class="stat"><small>Doors (7d)</small><strong>${week.doors}</strong><span>${week.sales} sales</span></div>
-        <div class="stat"><small>Doors (total)</small><strong>${all.doors}</strong><span>last ${LOG_FETCH_WINDOW_DAYS} days</span></div>
-        <div class="stat"><small>Close rate</small><strong>${pct(all.closeRate)}</strong><span>of answered</span></div>
-        <div class="stat"><small>Revenue</small><strong>${money(all.revenue)}</strong><span>logged sales</span></div>
-      </div>
-
-      <section class="card stack">
-        <div class="section-title"><h3>Doors — last 30 days</h3><span>daily</span></div>
-        ${barsHtml(ser.doors, ser.labels, { color: "var(--core-blue)" })}
-      </section>
+      ${kpiRangeUI()}
+      ${kpiFilterUI()}
+      ${personKpiBody(p)}
 
       <section class="card stack">
         <div class="section-title"><h3>Day by Day</h3><span>last 14 active days</span></div>
