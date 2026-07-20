@@ -150,23 +150,34 @@
   function computePerms() {
     const r = profile.role;
     const isAdmin = r === "admin";
-    const isManager = r === "manager" || r === "regional";
+    const isLeader = r === "manager" || r === "regional";
     perms = {
       isAdmin,
-      canEdit: isAdmin || isManager,           // can edit *some* people
-      canAdd: isAdmin || (isManager && !!profile.can_add),
-      canTeams: isAdmin,                        // create/rename/delete teams
-      canDelete: isAdmin,                       // permanently delete people
+      isLeader,
+      canEdit: isAdmin || isLeader,   // can edit *some* people (their downline)
+      canAdd: isAdmin || isLeader,    // add people (land under them in the tree)
+      canDelete: isAdmin,             // permanently delete people — admin only
+      canSetPassword: isAdmin,        // overwrite passwords — admin only
       role: r,
     };
   }
-  // Can the current user edit THIS person? Admin: anyone. Manager: own team.
-  // Regional: own region. Reps: no one.
+  // Everyone in the current user's downline (people they recruited, and those
+  // people's recruits, all the way down). Used to scope edit/add rights.
+  function inMyDownline(id) {
+    const set = new Set();
+    const walk = (pid) => {
+      const name = (people.find((p) => p.id === pid) || {}).name;
+      childrenOfC(pid, name).forEach((c) => { if (!set.has(c.id)) { set.add(c.id); walk(c.id); } });
+    };
+    walk(profile.id);
+    return set.has(id);
+  }
+  // Can the current user edit THIS person? Admin: anyone. Manager/Regional:
+  // anyone in their downline. Reps: no one (view only).
   function canEditPerson(p) {
     if (perms.isAdmin) return true;
-    if (p.role === "admin" || p.id === profile.id) return false;
-    if (profile.role === "manager") return p.team_id === profile.team_id;
-    if (profile.role === "regional") return !!profile.region_id && p.region_id === profile.region_id;
+    if (p.role === "admin") return false;
+    if (perms.isLeader) return inMyDownline(p.id);
     return false;
   }
 
@@ -757,10 +768,13 @@
 
   // ── People tab ──────────────────────────────────────────────────
   function recruitOptions(selectedId, excludeId) {
+    // Admins can assign anyone as recruiter; leaders are limited to themselves
+    // plus their own downline (so new/edited people stay within their reach).
+    const allowed = (p) => perms.isAdmin || p.id === profile.id || inMyDownline(p.id);
     const opts = people
-      .filter((p) => p.id !== excludeId)
+      .filter((p) => p.id !== excludeId && allowed(p))
       .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-      .map((p) => `<option value="${p.id}" ${selectedId === p.id ? "selected" : ""}>${escapeHtml(p.name)}${p.role === "admin" ? " (you)" : ""}</option>`)
+      .map((p) => `<option value="${p.id}" ${selectedId === p.id ? "selected" : ""}>${escapeHtml(p.name)}${p.id === profile.id ? " (you)" : ""}</option>`)
       .join("");
     return `<option value="">— none —</option>${opts}`;
   }

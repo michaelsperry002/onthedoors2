@@ -112,7 +112,7 @@
     if (prof.disabled) { await sb.auth.signOut(); session = null; authError = "Your account has been deactivated."; return; }
     profile = prof;
     const r = prof.role;
-    perms = { isAdmin: r === "admin", canManageStages: r === "admin", role: r };
+    perms = { isAdmin: r === "admin", isLeader: r === "manager" || r === "regional", canManageStages: r === "admin", role: r };
     await loadAll();
   }
 
@@ -170,10 +170,23 @@
   }
 
   // ── Permissions ─────────────────────────────────────────────────
+  // Everyone below the current user in the recruit tree.
+  function inMyDownline(id) {
+    if (!id) return false;
+    const set = new Set();
+    const walk = (pid) => {
+      const name = (people.find((p) => p.id === pid) || {}).name;
+      childrenOf(pid, name).forEach((c) => { if (!set.has(c.id)) { set.add(c.id); walk(c.id); } });
+    };
+    walk(profile.id);
+    return set.has(id);
+  }
+  // Reps manage their own candidates; managers/regionals also manage anyone in
+  // their downline's; admin manages all. (View scope mirrors this.)
   function canEditCandidate(c) {
     if (perms.isAdmin) return true;
     if (c.owner_id === profile.id || c.recruiter_id === profile.id) return true;
-    if ((profile.role === "manager" || profile.role === "regional") && c.team_id === profile.team_id) return true;
+    if (perms.isLeader) return inMyDownline(c.owner_id) || inMyDownline(c.recruiter_id);
     return false;
   }
 
@@ -204,12 +217,7 @@
   function visibleCandidates() {
     // RLS already scopes on the server; this mirrors it for the demo mock
     // and drives client-side filtering.
-    let list = candidates.filter((c) => {
-      if (perms.isAdmin) return true;
-      if (c.owner_id === profile.id || c.recruiter_id === profile.id) return true;
-      if ((profile.role === "manager" || profile.role === "regional") && c.team_id === profile.team_id) return true;
-      return false;
-    });
+    let list = candidates.filter((c) => canEditCandidate(c));
     if (filterText) { const q = filterText.toLowerCase(); list = list.filter((c) => (c.name || "").toLowerCase().includes(q)); }
     if (filterFlag !== "all") list = list.filter((c) => c.flag_id === (filterFlag === "none" ? null : filterFlag));
     if (filterRecruiter !== "all") list = list.filter((c) => c.recruiter_id === filterRecruiter);

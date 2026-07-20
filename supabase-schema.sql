@@ -412,3 +412,58 @@ create policy "Read daily goals in scope" on daily_goals for select using (
   or is_admin()
   or (my_role() in ('manager', 'regional') and team_id = my_team_id())
 );
+
+-- ════════════════════════════════════════════════════════════════════
+-- ROLE MODEL: downline-based scoping (Momentum = one org, no teams)
+--   • Everyone can VIEW the whole org (profiles/logs already readable).
+--   • Managers & Regionals can EDIT/ADD only within their DOWNLINE
+--     (people they recruited, recursively). No password/delete rights.
+--   • Admin (owner) can do everything, org-wide.
+--   • Reps: view-only (plus editing their own profile).
+-- ════════════════════════════════════════════════════════════════════
+
+-- True if `target` sits anywhere below `ancestor` in the recruit tree.
+create or replace function is_in_downline(target uuid, ancestor uuid)
+  returns boolean language sql security definer stable as $$
+  with recursive dl as (
+    select id from profiles where recruited_by = ancestor
+    union
+    select p.id from profiles p join dl on p.recruited_by = dl.id
+  )
+  select exists (select 1 from dl where id = target);
+$$;
+
+-- Convenience: is `target` in the CURRENT user's downline?
+create or replace function my_downline_has(target uuid)
+  returns boolean language sql security definer stable as $$
+  select is_in_downline(target, auth.uid());
+$$;
+
+-- ── profiles: leaders edit their downline ───────────────────────────
+drop policy if exists "Managers update team profiles" on profiles;
+drop policy if exists "Regionals update region profiles" on profiles;
+drop policy if exists "Leaders update downline profiles" on profiles;
+create policy "Leaders update downline profiles" on profiles for update
+  using (my_role() in ('manager', 'regional') and my_downline_has(id));
+
+-- ── candidates: downline-scoped read/write ──────────────────────────
+drop policy if exists "Scoped read candidates" on candidates;
+create policy "Scoped read candidates" on candidates for select using (
+  is_admin()
+  or owner_id = auth.uid()
+  or recruiter_id = auth.uid()
+  or (my_role() in ('manager', 'regional') and (my_downline_has(owner_id) or my_downline_has(recruiter_id)))
+);
+drop policy if exists "Scoped update candidates" on candidates;
+create policy "Scoped update candidates" on candidates for update using (
+  is_admin()
+  or owner_id = auth.uid()
+  or recruiter_id = auth.uid()
+  or (my_role() in ('manager', 'regional') and (my_downline_has(owner_id) or my_downline_has(recruiter_id)))
+);
+drop policy if exists "Scoped delete candidates" on candidates;
+create policy "Scoped delete candidates" on candidates for delete using (
+  is_admin()
+  or owner_id = auth.uid()
+  or (my_role() in ('manager', 'regional') and my_downline_has(owner_id))
+);
