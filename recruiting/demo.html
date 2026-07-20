@@ -45,7 +45,11 @@
           { id: "e4", candidate_id: "c3", kind: "created", to_stage: "Interested", actor_name: "Michael Sperry", at: daysAgo(40) },
           { id: "e5", candidate_id: "c3", kind: "stage", from_stage: "Interested", to_stage: "Docs Sent", actor_name: "Michael Sperry", at: daysAgo(30) },
         ];
-        const STORE = { pipeline_stages: stages, candidates, profiles, teams, resources, candidate_events };
+        const prospects = [
+          { id: "p1", name: "Casey Morgan", phone: "(555) 300-2001", notes: "Bartender at Ruby's — reads people instantly, great energy.", status: "new", owner_id: ME, recruiter_id: ME, team_id: "t1", converted: false, created_at: daysAgo(2) },
+          { id: "p2", name: "Riley Hughes", phone: "(555) 300-2002", notes: "Former college athlete, super competitive. Hates their desk job.", status: "contacted", last_contacted_at: daysAgo(1), owner_id: ME, recruiter_id: ME, team_id: "t1", converted: false, created_at: daysAgo(5) },
+        ];
+        const STORE = { pipeline_stages: stages, candidates, profiles, teams, resources, candidate_events, prospects };
 
         function makeBuilder(table) {
           const op = { filters: {}, single: false, insertRow: null, updatePatch: null, del: false };

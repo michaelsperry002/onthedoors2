@@ -319,3 +319,31 @@ html { scrollbar-gutter: stable; overflow-y: scroll; }
 .tl-item:not(:last-child) .tl-dot::after { content: ""; position: absolute; left: 50%; top: 12px; width: 2px; height: calc(100% + 8px); background: var(--line); transform: translateX(-50%); }
 .tl-text { font-size: 13.5px; font-weight: 600; }
 .tl-meta { font-size: 11.5px; color: var(--muted); }
+
+/* ── Prospects (pre-pipeline) ── */
+.prospect-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 13px 14px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+}
+.prospect-card.is-contacted { border-left: 3px solid var(--good); }
+.prospect-card .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.prospect-card .top strong { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+.prospect-card .tag {
+  flex: 0 0 auto; font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+}
+.prospect-card .tag.new { background: #eef1f5; color: var(--slate); }
+.prospect-card .tag.time { background: rgba(31,157,85,0.12); color: var(--good); }
+.pr-phone { font-size: 13px; color: var(--slate); font-weight: 600; margin-top: 4px; }
+.pr-notes { font-size: 13px; color: var(--muted); margin-top: 5px; line-height: 1.45; white-space: pre-wrap; }
+.pr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.pr-btn {
+  flex: 1 1 auto; min-width: 74px; text-align: center; text-decoration: none;
+  padding: 9px 12px; border-radius: 10px; font-size: 13px; font-weight: 700;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--slate);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.pr-btn.call { background: rgba(30,79,255,0.10); color: var(--core-blue); border-color: transparent; }
+.pr-btn.text { background: rgba(31,157,85,0.12); color: var(--good); border-color: transparent; }
+.pr-btn.convert { background: var(--core-blue); color: #fff; border-color: transparent; }
+.pr-btn.del { flex: 0 0 auto; min-width: 40px; color: var(--danger); }
+@media (hover: hover) { .pr-btn:hover { filter: brightness(0.97); } }

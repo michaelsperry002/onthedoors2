@@ -467,3 +467,42 @@ create policy "Scoped delete candidates" on candidates for delete using (
   or owner_id = auth.uid()
   or (my_role() in ('manager', 'regional') and my_downline_has(owner_id))
 );
+
+-- ── Prospects (pre-pipeline scratchpad) ─────────────────────────────
+-- People a rep thinks could sell but hasn't reached out to yet. Converting
+-- one creates a candidate at the Interested stage and removes the prospect.
+create table if not exists prospects (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text default '',
+  notes text default '',
+  status text not null default 'new',          -- 'new' | 'contacted'
+  last_contacted_at timestamptz,
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  recruiter_id uuid,
+  team_id uuid,
+  converted boolean not null default false,
+  created_at timestamptz default now()
+);
+alter table prospects enable row level security;
+
+-- Same downline scoping as candidates.
+drop policy if exists "Scoped read prospects" on prospects;
+create policy "Scoped read prospects" on prospects for select using (
+  is_admin() or owner_id = auth.uid() or recruiter_id = auth.uid()
+  or (my_role() in ('manager','regional') and (my_downline_has(owner_id) or my_downline_has(recruiter_id)))
+);
+drop policy if exists "Insert own prospects" on prospects;
+create policy "Insert own prospects" on prospects for insert with check (
+  auth.uid() is not null and (owner_id = auth.uid() or is_admin())
+);
+drop policy if exists "Scoped update prospects" on prospects;
+create policy "Scoped update prospects" on prospects for update using (
+  is_admin() or owner_id = auth.uid()
+  or (my_role() in ('manager','regional') and my_downline_has(owner_id))
+);
+drop policy if exists "Scoped delete prospects" on prospects;
+create policy "Scoped delete prospects" on prospects for delete using (
+  is_admin() or owner_id = auth.uid()
+  or (my_role() in ('manager','regional') and my_downline_has(owner_id))
+);

@@ -27,7 +27,7 @@
   // ── State ───────────────────────────────────────────────────────
   let session = null, profile = null, loading = true, authError = "";
   let activeTab = "board";
-  let stages = [], flags = [], candidates = [], people = [], teams = [], resources = [], events = [];
+  let stages = [], flags = [], candidates = [], people = [], teams = [], resources = [], events = [], prospects = [];
   let perms = {};
   let modal = null; // {type, ...}
   let filterText = "", filterStage = "all", filterFlag = "all", filterRecruiter = "all";
@@ -117,13 +117,14 @@
   }
 
   async function loadAll() {
-    const [stageRes, candRes, pplRes, teamRes, resRes, evRes] = await Promise.all([
+    const [stageRes, candRes, pplRes, teamRes, resRes, evRes, prosRes] = await Promise.all([
       sb.from("pipeline_stages").select("*").order("position", { ascending: true }),
       sb.from("candidates").select("*").order("created_at", { ascending: false }),
       sb.from("profiles").select("id,name,role,team_id,region_id,email,phone,recruited_by,recruited_by_name"),
       sb.from("teams").select("*"),
       sb.from("resources").select("*").order("position", { ascending: true }),
       sb.from("candidate_events").select("*").order("at", { ascending: false }),
+      sb.from("prospects").select("*").order("created_at", { ascending: false }),
     ]);
     const allStages = stageRes.data || [];
     stages = allStages.filter((s) => s.kind === "stage").sort((a, b) => a.position - b.position);
@@ -133,6 +134,7 @@
     teams = teamRes.data || [];
     resources = resRes.data || [];
     events = evRes.data || [];
+    prospects = prosRes.data || [];
     if (!stages.length && perms.isAdmin) await seedDefaults();
     if (!resources.length && perms.isAdmin) await seedResources();
     if (NOTIF_OK() && Notification.permission === "granted") startReminderLoop();
@@ -225,10 +227,11 @@
   }
 
   function renderApp() {
-    const tabs = [["board", "Board"], ["list", "List"], ["tree", "Downline"], ["calendar", "Calendar"], ["resources", "Resources"]];
+    const tabs = [["prospects", "Prospects"], ["board", "Board"], ["list", "List"], ["tree", "Downline"], ["calendar", "Calendar"], ["resources", "Resources"]];
     if (perms.canManageStages) tabs.push(["settings", "Settings"]);
     let body = "";
-    if (activeTab === "board") body = renderBoard();
+    if (activeTab === "prospects") body = renderProspects();
+    else if (activeTab === "board") body = renderBoard();
     else if (activeTab === "list") body = renderList();
     else if (activeTab === "tree") body = renderTree();
     else if (activeTab === "calendar") body = renderCalendar();
@@ -247,12 +250,116 @@
     bind("#signOut", "click", async () => { await sb.auth.signOut(); session = null; profile = null; render(); });
     document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { activeTab = b.dataset.tab; render(); }));
     bind("#addCandidate", "click", () => openCandidateModal(null));
+    bindProspectsEvents();
     bindBoardEvents();
     bindListEvents();
     bindTreeEvents();
     bindCalendarEvents();
     bindResourcesEvents();
     bindSettingsEvents();
+  }
+
+  // ── Prospects (pre-pipeline) ────────────────────────────────────
+  // A scratchpad of people who might be good for sales but haven't been
+  // reached out to yet. Call/Text from the card, then convert the interested
+  // ones straight onto the board at the Interested stage.
+  function canManageProspect(pr) {
+    if (perms.isAdmin) return true;
+    if (pr.owner_id === profile.id || pr.recruiter_id === profile.id) return true;
+    if (perms.isLeader) return inMyDownline(pr.owner_id) || inMyDownline(pr.recruiter_id);
+    return false;
+  }
+  function visibleProspects() {
+    return prospects.filter((p) => !p.converted && canManageProspect(p));
+  }
+  const telHref = (ph) => (ph || "").replace(/[^0-9+]/g, "");
+
+  function renderProspects() {
+    const list = visibleProspects();
+    return `
+      <div class="section-title"><h2>Prospects</h2><span>${list.length} to reach out to</span></div>
+      <section class="card stack">
+        <div class="section-title"><h3>Add a Prospect</h3><span>someone who could crush it in sales</span></div>
+        <div class="form-2col">
+          <label>Name <input id="prName" placeholder="Jordan Blake" /></label>
+          <label>Phone <input id="prPhone" type="tel" placeholder="(555) 123-4567" /></label>
+        </div>
+        <label>Why them? <textarea id="prNotes" placeholder="Super personable, hates their current job, natural closer..."></textarea></label>
+        <button class="blue" id="prAdd" type="button">Add Prospect</button>
+      </section>
+      ${list.length ? list.map((p) => {
+        const t = telHref(p.phone);
+        const contacted = p.status === "contacted";
+        return `
+        <div class="prospect-card ${contacted ? "is-contacted" : ""}">
+          <div class="top">
+            <strong>${esc(p.name)}</strong>
+            <span class="tag ${contacted ? "time" : "new"}">${contacted ? (p.last_contacted_at ? "Reached out " + relTime(p.last_contacted_at) : "Reached out") : "Not contacted"}</span>
+          </div>
+          ${p.phone ? `<div class="pr-phone">${esc(p.phone)}</div>` : ""}
+          ${p.notes ? `<p class="pr-notes">${esc(p.notes)}</p>` : ""}
+          <div class="pr-actions">
+            ${t ? `<a class="pr-btn call" href="tel:${t}" data-contact="${p.id}">📞 Call</a>` : ""}
+            ${t ? `<a class="pr-btn text" href="sms:${t}" data-contact="${p.id}">💬 Text</a>` : ""}
+            <button class="pr-btn convert" data-convert="${p.id}" type="button">➜ Interested</button>
+            <button class="pr-btn del" data-del-prospect="${p.id}" type="button">✕</button>
+          </div>
+        </div>`;
+      }).join("") : `<p class="empty">No prospects yet. Jot down people who'd be great at sales — reach out when you're ready, then convert the interested ones onto the board.</p>`}`;
+  }
+
+  function bindProspectsEvents() {
+    if (activeTab !== "prospects") return;
+    bind("#prAdd", "click", addProspect);
+    document.querySelectorAll("[data-contact]").forEach((el) => el.addEventListener("click", () => markContacted(el.dataset.contact)));
+    document.querySelectorAll("[data-convert]").forEach((el) => el.addEventListener("click", () => convertProspect(el.dataset.convert)));
+    document.querySelectorAll("[data-del-prospect]").forEach((el) => el.addEventListener("click", () => deleteProspect(el.dataset.delProspect)));
+  }
+
+  async function addProspect() {
+    const name = val("#prName").trim();
+    if (!name) { alert("Name is required."); return; }
+    const row = { name, phone: val("#prPhone").trim(), notes: val("#prNotes").trim(),
+      status: "new", owner_id: profile.id, recruiter_id: profile.id, team_id: profile.team_id, converted: false };
+    const { data, error } = await sb.from("prospects").insert(row).select().single();
+    if (error) { alert("Couldn't add prospect: " + error.message + "\n\nMake sure the prospects table migration has been run in Supabase."); return; }
+    prospects.unshift(data);
+    render();
+  }
+
+  // Tapping Call/Text follows the tel:/sms: link AND marks them contacted.
+  async function markContacted(id) {
+    const p = prospects.find((x) => x.id === id);
+    if (!p || p.status === "contacted") return;
+    const patch = { status: "contacted", last_contacted_at: new Date().toISOString() };
+    Object.assign(p, patch);
+    try { await sb.from("prospects").update(patch).eq("id", id); } catch (e) { /* non-fatal */ }
+    setTimeout(render, 60); // let the dialer/SMS app open first
+  }
+
+  async function convertProspect(id) {
+    const p = prospects.find((x) => x.id === id);
+    if (!p) return;
+    const interested = stageNamed(/interested/i) || stages[0];
+    const row = { name: p.name, phone: p.phone || "", email: "", source: "prospect",
+      stage_id: interested ? interested.id : null, flag_id: null,
+      recruiter_id: p.recruiter_id || profile.id, team_id: p.team_id || profile.team_id,
+      owner_id: profile.id, notes: p.notes || "", hired: false, updated_at: new Date().toISOString() };
+    const { data, error } = await sb.from("candidates").insert(row).select().single();
+    if (error) { alert("Couldn't convert: " + error.message); return; }
+    candidates.unshift(data);
+    logEvent(data.id, "created", { to_stage: (interested || {}).name || "" });
+    await sb.from("prospects").delete().eq("id", id);
+    prospects = prospects.filter((x) => x.id !== id);
+    activeTab = "board";
+    render();
+  }
+
+  async function deleteProspect(id) {
+    if (!confirm("Remove this prospect?")) return;
+    await sb.from("prospects").delete().eq("id", id);
+    prospects = prospects.filter((x) => x.id !== id);
+    render();
   }
 
   // ── Board (Kanban) ──────────────────────────────────────────────
