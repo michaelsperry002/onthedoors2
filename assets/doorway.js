@@ -66,7 +66,6 @@
 
   const managerNav = [
     { id: "dashboard", label: "Dashboard" },
-    { id: "leaderboard", label: "Leaderboard" },
     { id: "recruits", label: "Recruits" },
     { id: "reports", label: "Reports" },
     { id: "settings", label: "Settings" },
@@ -74,7 +73,6 @@
 
   const regionalNav = [
     { id: "dashboard", label: "Dashboard" },
-    { id: "leaderboard", label: "Teams" },
     { id: "reports", label: "Reports" },
     { id: "settings", label: "Settings" },
   ];
@@ -1424,65 +1422,6 @@
       </section>`;
   }
 
-  function renderLeaderboard() {
-    const rankings = teamRankings();
-    const reps = teamMembers.filter((m) => m.role === "rep");
-
-    const leaderboardTab = (title, data, metric) => {
-      return data.map((r, i) => {
-        const stat = r.stats[metric];
-        const value = metric === "revenue" ? money(stat) : stat;
-        return `
-          <div class="leaderboard-row">
-            <span class="rank">#${i + 1}</span>
-            <span class="name">${escapeHtml(r.name)}</span>
-            <span class="value">${value}</span>
-          </div>`;
-      }).join("");
-    };
-
-    return `
-      <section id="leaderboard" class="section ${activeTab === "leaderboard" ? "active" : ""}">
-        <div class="section-title"><h2>Team Leaderboard</h2><span>${reps.length} reps this month</span></div>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Most Doors</h3><span>Doors knocked</span></div>
-          <div class="leaderboard">
-            ${leaderboardTab("Doors", rankings.byDoors, "doors")}
-          </div>
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Top Sellers</h3><span>Sales closed</span></div>
-          <div class="leaderboard">
-            ${leaderboardTab("Sales", rankings.bySales, "sale")}
-          </div>
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Revenue Leaders</h3><span>Total contract value</span></div>
-          <div class="leaderboard">
-            ${leaderboardTab("Revenue", rankings.byRevenue, "revenue")}
-          </div>
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Best Close Rate</h3><span>Pitches to sales ratio</span></div>
-          <div class="leaderboard">
-            ${rankings.byCloseRate.map((r, i) => {
-              const closeRate = pct(r.stats.sale, r.stats.answered || r.stats.doors);
-              return `
-                <div class="leaderboard-row">
-                  <span class="rank">#${i + 1}</span>
-                  <span class="name">${escapeHtml(r.name)}</span>
-                  <span class="value">${closeRate.toFixed(1)}%</span>
-                </div>`;
-            }).join("")}
-          </div>
-        </section>
-      </section>`;
-  }
-
   function renderReports() {
     const thisMonth = teamStatsFor("month");
     const lastMonth = logs.filter((l) => {
@@ -1611,60 +1550,6 @@
           ${chartRow("Answer Rate", pct(stats.answered, stats.doors), settings.target_answer_rate, "var(--blue)")}
           ${chartRow("Pitch Rate", pct(stats.pitch, stats.answered), settings.target_pitch_rate, "var(--purple)")}
           ${chartRow("Close Rate", pct(stats.sale, stats.pitch), settings.target_close_rate, "var(--sale)")}
-        </section>
-      </section>`;
-  }
-
-  function renderRegionalLeaderboard() {
-    const teamStats = allTeams.map((team) => ({
-      ...team,
-      logs: logs.filter((l) => l.team_id === team.id),
-    })).map((team) => ({
-      ...team,
-      doors: team.logs.length,
-      sales: team.logs.filter((l) => l.outcome === "sale").length,
-      revenue: team.logs.reduce((s, l) => s + Number(l.contract_value || 0), 0),
-    })).filter((t) => t.doors > 0 || t.sales > 0 || t.revenue > 0);
-
-    const byDoors = [...teamStats].sort((a, b) => b.doors - a.doors);
-    const bySales = [...teamStats].sort((a, b) => b.sales - a.sales);
-    const byRevenue = [...teamStats].sort((a, b) => b.revenue - a.revenue);
-
-    const leaderboardTeams = (data, metric) => {
-      return data.map((t, i) => {
-        const value = metric === "revenue" ? money(t.revenue) : metric === "sales" ? t.sales : t.doors;
-        return `
-          <div class="leaderboard-row">
-            <span class="rank">#${i + 1}</span>
-            <span class="name">${escapeHtml(t.name || "Team")}</span>
-            <span class="value">${value}</span>
-          </div>`;
-      }).join("");
-    };
-
-    return `
-      <section id="leaderboard" class="section ${activeTab === "leaderboard" ? "active" : ""}">
-        <div class="section-title"><h2>Team Rankings</h2><span>${allTeams.length} teams</span></div>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Most Doors</h3><span>Team activity</span></div>
-          <div class="leaderboard">
-            ${leaderboardTeams(byDoors, "doors")}
-          </div>
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Top Sales</h3><span>Deals closed</span></div>
-          <div class="leaderboard">
-            ${leaderboardTeams(bySales, "sales")}
-          </div>
-        </section>
-
-        <section class="card stack">
-          <div class="section-title"><h3>Revenue Leaders</h3><span>Total contract value</span></div>
-          <div class="leaderboard">
-            ${leaderboardTeams(byRevenue, "revenue")}
-          </div>
         </section>
       </section>`;
   }
@@ -2083,24 +1968,6 @@
       sale: count(filtered, "sale"),
       revenue: filtered.reduce((s, l) => s + Number(l.contract_value || 0), 0),
       answered: count(filtered, "answered") + count(filtered, "pitch") + count(filtered, "appointment") + count(filtered, "sale"),
-    };
-  }
-
-  function teamRankings() {
-    const reps = teamMembers.filter((m) => m.role === "rep");
-    const stats = reps.map((r) => ({
-      ...r,
-      stats: repStatsFor(r.id, "month"),
-    }));
-    return {
-      byDoors: [...stats].sort((a, b) => b.stats.doors - a.stats.doors),
-      bySales: [...stats].sort((a, b) => b.stats.sale - a.stats.sale),
-      byRevenue: [...stats].sort((a, b) => b.stats.revenue - a.stats.revenue),
-      byCloseRate: [...stats].sort((a, b) => {
-        const aRate = pct(b.stats.sale, b.stats.doors);
-        const bRate = pct(a.stats.sale, a.stats.doors);
-        return aRate - bRate;
-      }),
     };
   }
 
