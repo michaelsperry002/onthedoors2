@@ -205,27 +205,8 @@
       teamId = prof.team_id;
       regionId = prof.region_id;
 
-      if (profile.role === "regional") {
-        // Regional: aggregate across every team in the region.
-        const { data: regionProfiles } = await sb.from("profiles").select("team_id").eq("region_id", regionId);
-        const teamIds = [...new Set((regionProfiles || []).map((p) => p.team_id).filter(Boolean))];
-
-        const [teamsRes, settingsRes, logsRes, accountsRes] = await Promise.all([
-          sb.from("teams").select("*").in("id", teamIds),
-          sb.from("team_settings").select("*").eq("team_id", teamId).single(),
-          sb.from("logs").select("*").in("team_id", teamIds).gte("date", logFetchCutoff()).order("created_at", { ascending: false }),
-          sb.from("accounts").select("*").in("team_id", teamIds).order("created_at", { ascending: false }),
-        ]);
-
-        allTeams = teamsRes.data || [];
-        applySettings(settingsRes.data);
-        logs = logsRes.data || [];
-        accounts = accountsRes.data || [];
-        callbacks = [];
-        sales = [];
-        teamMembers = [];
-      } else {
-        // Rep / Manager / Admin: everything scoped to their own team.
+      {
+        // All roles get the same full field experience scoped to their team.
         const [teamRes, settingsRes, logsRes, cbRes, salesRes, membersRes, accountsRes] = await Promise.all([
           sb.from("teams").select("name, short_code").eq("id", teamId).single(),
           sb.from("team_settings").select("*").eq("team_id", teamId).single(),
@@ -465,23 +446,12 @@
 
   function renderApp() {
     const isAdmin = profile.role === "admin";
-    const isRep = profile.role === "rep" || isAdmin;
-    const isManager = profile.role === "manager";
-    const isRegional = profile.role === "regional";
-    const nav = isAdmin ? [...repNav, { id: "recruits", label: "Recruits" }]
-      : isRep ? repNav
-      : isManager || isRegional ? managerNav
-      : repNav;
+    // All roles currently get the identical full field experience. Admin also
+    // gets the Recruits tab. (Role-specific views can be reintroduced later.)
+    const nav = isAdmin ? [...repNav, { id: "recruits", label: "Recruits" }] : repNav;
 
-    let sections = "";
-    if (isRep) {
-      sections = `${renderDashboard()}${renderLog()}${renderCallbacks()}${renderCalendar()}${renderAccounts()}${renderRevenue()}${renderSettings()}`;
-      if (isAdmin) sections += renderRecruits();
-    } else if (isManager) {
-      sections = `${renderManagerDashboard()}${renderLeaderboard()}${renderRecruits()}${renderReports()}${renderSettings()}`;
-    } else if (isRegional) {
-      sections = `${renderRegionalDashboard()}${renderRegionalLeaderboard()}${renderReports()}${renderSettings()}`;
-    }
+    let sections = `${renderDashboard()}${renderLog()}${renderCallbacks()}${renderCalendar()}${renderAccounts()}${renderRevenue()}${renderSettings()}`;
+    if (isAdmin) sections += renderRecruits();
 
     appRoot().innerHTML = `
       <main class="app">
