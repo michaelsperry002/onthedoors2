@@ -60,7 +60,6 @@
     { id: "log", label: "Log" },
     { id: "callbacks", label: "Callbacks" },
     { id: "calendar", label: "Calendar" },
-    { id: "accounts", label: "Accounts" },
     { id: "revenue", label: "Revenue" },
     { id: "settings", label: "Settings" },
   ];
@@ -450,7 +449,7 @@
     // gets the Recruits tab. (Role-specific views can be reintroduced later.)
     const nav = isAdmin ? [...repNav, { id: "recruits", label: "Recruits" }] : repNav;
 
-    let sections = `${renderDashboard()}${renderLog()}${renderCallbacks()}${renderCalendar()}${renderAccounts()}${renderRevenue()}${renderSettings()}`;
+    let sections = `${renderDashboard()}${renderLog()}${renderCallbacks()}${renderCalendar()}${renderRevenue()}${renderSettings()}`;
     if (isAdmin) sections += renderRecruits();
 
     appRoot().innerHTML = `
