@@ -132,18 +132,19 @@
     render();
 
     sb.auth.onAuthStateChange(async (event, newSession) => {
-      session = newSession;
-      if (session) {
-        await loadFromSupabase();
-      } else {
-        profile = null;
-        teamId = null;
-        logs = [];
-        callbacks = [];
-        sales = [];
-        accounts = [];
-        teamMembers = [];
+      // A token refresh (roughly hourly) is NOT a login change — just keep the
+      // fresh token. Reloading here (and re-checking the profile) is what was
+      // occasionally bouncing people back to the sign-in screen.
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") { session = newSession; return; }
+      if (event === "SIGNED_OUT" || !newSession) {
+        session = null; profile = null; teamId = null;
+        logs = []; callbacks = []; sales = []; accounts = []; teamMembers = [];
+        render();
+        return;
       }
+      // SIGNED_IN / INITIAL_SESSION — only (re)load when we don't already have data.
+      session = newSession;
+      if (!profile) { await loadFromSupabase(); }
       render();
     });
   }
@@ -189,7 +190,9 @@
   async function loadFromSupabase() {
     try {
       const { data: prof } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
-      if (!prof) { profile = null; return; }
+      // A transient network miss shouldn't kick a valid session to the login
+      // screen — keep whatever profile we already have if the fetch came back empty.
+      if (!prof) { return; }
       if (prof.disabled) {
         // Deactivated in CORE: lock them out of the app entirely.
         await sb.auth.signOut();
