@@ -444,13 +444,11 @@
   }
 
   function renderApp() {
-    const isAdmin = profile.role === "admin";
-    // All roles currently get the identical full field experience. Admin also
-    // gets the Recruits tab. (Role-specific views can be reintroduced later.)
-    const nav = isAdmin ? [...repNav, { id: "recruits", label: "Recruits" }] : repNav;
+    // All roles get the identical full field experience.
+    // (Role-specific views can be reintroduced later.)
+    const nav = repNav;
 
     let sections = `${renderDashboard()}${renderLog()}${renderCallbacks()}${renderCalendar()}${renderRevenue()}${renderSettings()}`;
-    if (isAdmin) sections += renderRecruits();
 
     appRoot().innerHTML = `
       <main class="app">
