@@ -535,7 +535,6 @@
           <label>Stage <select id="mStage" ${dis}>${stageOpts}</select></label>
           <label>Tag <select id="mFlag" ${dis}>${flagOpts}</select></label>
           <label>Recruiter <select id="mRecruiter" ${dis}>${recOpts}</select></label>
-          <label>Team <select id="mTeam" ${dis}>${teamOpts}</select></label>
           ${!isNew ? `<label>Follow-up date <input id="mFollow" type="date" value="${esc(c.follow_up_date || "")}" ${dis} /></label>` : ""}
           ${!isNew ? `<label>Appointment <input id="mAppt" type="datetime-local" value="${esc(toLocalInput(c.appt_at))}" ${dis} /></label>` : ""}
         </div>
@@ -574,7 +573,7 @@
       stage_id: stageId || (stages[0] && stages[0].id),
       flag_id: val("#mFlag") || null,
       recruiter_id: val("#mRecruiter") || profile.id,
-      team_id: val("#mTeam") || profile.team_id,
+      team_id: (modal.c && modal.c.team_id) || profile.team_id,
       notes: val("#mNotes").trim(),
       hired: !!(stage && stage.is_final),
       updated_at: new Date().toISOString(),

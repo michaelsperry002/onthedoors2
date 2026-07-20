@@ -825,7 +825,7 @@
               <span class="pill ${p.disabled ? "danger" : ""}">${p.disabled ? "Deactivated" : escapeHtml(ROLE_LABELS[p.role] || p.role)}</span>
             </div>
             <div class="meta-row">
-              <span>${escapeHtml(teamName(p.team_id))}</span>
+              ${(() => { const rec = p.recruited_by ? (people.find((x) => x.id === p.recruited_by) || {}).name : p.recruited_by_name; return rec ? `<span>↑ ${escapeHtml(rec)}</span>` : ""; })()}
               <span>${s.doors} doors</span>
               <span>${s.sales} sales</span>
               <span>${money(s.revenue)}</span>
