@@ -1279,3 +1279,19 @@ h1, h2, h3, .stat-card strong, .quick-card strong {
 
 /* Reserve scrollbar space so content never shifts sideways on load */
 html { scrollbar-gutter: stable; overflow-y: scroll; }
+
+/* ── Daily goals prompt ── */
+.daily-goals-card .dg-date {
+  color: var(--core-blue); font-weight: 800; font-size: 12px;
+  letter-spacing: 0.08em; text-transform: uppercase; margin: 0;
+}
+.dg-field {
+  display: grid; gap: 6px; text-align: left;
+  font-weight: 700; font-size: 13px; color: var(--muted);
+}
+.dg-field input {
+  width: 100%; padding: 13px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--panel);
+  font-size: 18px; font-weight: 800; color: var(--ink, inherit);
+}
+.dg-field input:focus { outline: 2px solid var(--core-blue); outline-offset: 1px; }

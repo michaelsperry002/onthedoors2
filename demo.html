@@ -150,6 +150,7 @@
         const b = {
           select() { return b; },
           insert(p) { op.type = "insert"; op.payload = p; return b; },
+          upsert(p) { op.type = "insert"; op.payload = p; return b; },
           update(p) { op.type = "update"; op.payload = p; return b; },
           delete() { op.type = "delete"; return b; },
           eq(col, val) { op.filters[col] = val; return b; },

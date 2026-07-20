@@ -384,3 +384,31 @@ create policy "Scoped delete candidates" on candidates for delete using (
   or owner_id = auth.uid()
   or (my_role() in ('manager', 'regional') and team_id = my_team_id())
 );
+
+-- ── Daily goals (per user, per day) ─────────────────────────────────
+-- Asked once each morning in the KPI app; tracked so history is queryable.
+create table if not exists daily_goals (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  team_id uuid,
+  date date not null,
+  door_goal integer not null default 0,
+  rev_goal integer not null default 0,
+  created_at timestamptz default now(),
+  unique (user_id, date)
+);
+alter table daily_goals enable row level security;
+
+-- A person manages their own daily goals; managers/regionals/admin can read
+-- their people's goals for coaching (mirrors the logs read policy).
+drop policy if exists "Own daily goals write" on daily_goals;
+create policy "Own daily goals write" on daily_goals for all
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists "Read daily goals in scope" on daily_goals;
+create policy "Read daily goals in scope" on daily_goals for select using (
+  user_id = auth.uid()
+  or is_admin()
+  or (my_role() in ('manager', 'regional') and team_id = my_team_id())
+);

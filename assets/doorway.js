@@ -96,6 +96,9 @@
   let customFrom = "";
   let customTo = "";
   let personalGoals = null;
+  // Daily goals: asked once per day on first app open, tracked per day.
+  let dailyGoals = null;       // today's { date, door_goal, rev_goal } or null
+  let showDailyGoals = false;  // is the "set today's goals" prompt open?
   let clockTimer = null;
   let loading = true;
   let authMode = "login";
@@ -232,6 +235,7 @@
 
       }
       saveCache();
+      await loadDailyGoals();
     } catch (err) {
       console.error("Failed to load from Supabase:", err);
     }
@@ -468,7 +472,9 @@
             <span>${item.label}</span>
           </button>`).join("")}
       </nav>
-      ${profile.needs_onboarding ? (passwordSet ? renderOnboarding() : renderSetPassword()) : ""}`;
+      ${profile.needs_onboarding
+        ? (passwordSet ? renderOnboarding() : renderSetPassword())
+        : (showDailyGoals ? renderDailyGoals() : "")}`;
 
     document.querySelectorAll("[data-tab]").forEach((btn) => {
       btn.addEventListener("click", () => go(btn.dataset.tab));
@@ -477,6 +483,7 @@
     scrollActiveNavIntoView();
     bindOnboardingEvents();
     bindSetPasswordEvents();
+    bindDailyGoalsEvents();
   }
 
   // Re-rendering rebuilds the nav bar from scratch, which would otherwise
@@ -571,6 +578,58 @@
     render();
   }
 
+  // ── Daily Goals (asked once per day, tracked per day) ─────────────
+  const dailyGoalsKey = () => `core.dailyGoals.${profile ? profile.id : "anon"}`;
+  function lastDailyGoals() {
+    try { return JSON.parse(localStorage.getItem(dailyGoalsKey()) || "null"); } catch { return null; }
+  }
+  // Decide whether to prompt: no goals set for today yet. Prefers a row from
+  // Supabase (cross-device) but falls back to localStorage so it works offline
+  // and even before the daily_goals table migration is run.
+  async function loadDailyGoals() {
+    if (!profile) return;
+    let row = null;
+    try {
+      const { data } = await sb.from("daily_goals").select("*").eq("user_id", profile.id).eq("date", todayKey()).single();
+      if (data) row = data;
+    } catch { /* table may not exist yet */ }
+    const local = lastDailyGoals();
+    if (!row && local && local.date === todayKey()) row = local;
+    dailyGoals = (row && row.date === todayKey()) ? row : null;
+    showDailyGoals = !dailyGoals;
+  }
+  async function submitDailyGoals() {
+    const door = Math.max(0, Math.round(Number(val("#dgDoor")) || 0));
+    const rev = Math.max(0, Math.round(Number(val("#dgRev")) || 0));
+    const row = { user_id: profile.id, team_id: teamId, date: todayKey(), door_goal: door, rev_goal: rev };
+    dailyGoals = row;
+    showDailyGoals = false;
+    localStorage.setItem(dailyGoalsKey(), JSON.stringify(row));
+    // Best-effort persistence; needs a unique (user_id, date) constraint.
+    try { await sb.from("daily_goals").upsert(row, { onConflict: "user_id,date" }); } catch { /* ignore */ }
+    range = "today";
+    render();
+  }
+  function renderDailyGoals() {
+    const prev = lastDailyGoals();
+    const doorDefault = (prev && prev.door_goal) || settings.daily_door_goal || 50;
+    const revDefault = (prev && prev.rev_goal) || settings.daily_revenue_goal || 1000;
+    return `
+      <div class="onboarding-overlay">
+        <div class="onboarding-card daily-goals-card">
+          <p class="dg-date">${escapeHtml(dateLabel(new Date()))}</p>
+          <h2>Set Today's Goals</h2>
+          <p>Lock in your targets for today. You'll be asked fresh every morning.</p>
+          <label class="dg-field"><span>🚪 Doors to knock</span><input id="dgDoor" type="number" min="0" inputmode="numeric" value="${doorDefault}" /></label>
+          <label class="dg-field"><span>💰 Revenue goal ($)</span><input id="dgRev" type="number" min="0" inputmode="numeric" value="${revDefault}" /></label>
+          <button id="dgSubmit" class="primary" type="button">Start Knocking</button>
+        </div>
+      </div>`;
+  }
+  function bindDailyGoalsEvents() {
+    bind("#dgSubmit", "click", submitDailyGoals);
+  }
+
   // ── Dashboard ───────────────────────────────────────────────────
   function renderDashboard() {
     const totals = totalsFor(range);
@@ -638,11 +697,11 @@
         </div>
         <div class="desktop-grid">
           <section class="card stack">
-            <div class="section-title"><h3>Goals</h3><span>${capitalize(range)}</span></div>
-            ${progress("Doors", totals.doors, settings.daily_door_goal)}
+            <div class="section-title"><h3>Goals</h3><span>${capitalize(range)}${dailyGoals ? " · today's targets" : ""}</span></div>
+            ${progress("Doors", totals.doors, (dailyGoals && dailyGoals.door_goal) || settings.daily_door_goal)}
             ${progress("Sales", totals.sale, settings.daily_sales_goal)}
             ${progress("Go backs", totals.appointment, settings.daily_appointment_goal)}
-            ${progress("Revenue", totals.revenue, settings.daily_revenue_goal, true)}
+            ${progress("Revenue", totals.revenue, (dailyGoals && dailyGoals.rev_goal) || settings.daily_revenue_goal, true)}
           </section>
           <section class="card stack">
             <div class="section-title"><h3>Conversion</h3><span>Targets</span></div>
