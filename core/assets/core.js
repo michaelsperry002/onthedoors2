@@ -375,11 +375,11 @@
   }
 
   function renderApp() {
-    const tabs = [["dashboard", "Dashboard"], ["kpis", "KPIs"], ["teams", "Teams"], ["people", "People"]];
+    const tabs = [["dashboard", "Dashboard"], ["kpis", "KPIs"], ["downline", "Downline"], ["people", "People"]];
     let body = "";
     if (activeTab === "dashboard") body = renderDashboard();
     else if (activeTab === "kpis") body = kpiPersonId ? renderKpiPerson() : renderKpiList();
-    else if (activeTab === "teams") body = renderTeams();
+    else if (activeTab === "downline") body = renderDownline();
     else if (activeTab === "people") body = viewPersonId ? renderPersonDetail() : renderPeople();
 
     appRoot().innerHTML = `
@@ -439,7 +439,7 @@
     const myRecruits = recruitsOf(profile).length;
 
     return `
-      <div class="section-title"><h2>Organization</h2>${perms.isAdmin ? `<button class="secondary" id="exportLogs" type="button" style="padding:6px 12px;font-size:13px">Export logs</button>` : `<span>${teams.length} teams · ${active.length} active</span>`}</div>
+      <div class="section-title"><h2>Momentum</h2>${perms.isAdmin ? `<button class="secondary" id="exportLogs" type="button" style="padding:6px 12px;font-size:13px">Export logs</button>` : `<span>${active.length} active</span>`}</div>
       <div class="range-chips" id="rangeChips">
         ${RANGES.map(([v, l]) => `<button data-range="${v}" class="${range === v ? "active" : ""}" type="button">${l}</button>`).join("")}
       </div>
@@ -481,16 +481,6 @@
           <span><b>${pct(mine.closeRate)}</b> close</span>
           <span><b>${myRecruits}</b> recruits</span>
         </div>
-      </section>
-
-      <section class="card stack">
-        <div class="section-title"><h3>Teams</h3><span>${rangeLabel(range)} · by revenue</span></div>
-        ${teamRows.length ? teamRows.map((r) => `
-          <div class="progress-row">
-            <div class="row-head"><b>${escapeHtml(r.team.name)}</b><span>${money(r.revenue)}</span></div>
-            <div class="track"><div class="track-fill" style="width:${(r.revenue / maxTeamRev * 100).toFixed(1)}%"></div></div>
-            <div class="meta-row"><span>${r.members} members</span><span>${r.doors} doors</span><span>${r.sales} sales</span><span>${pct(r.closeRate)} close</span></div>
-          </div>`).join("") : `<p class="empty">No teams yet.</p>`}
       </section>
 
       <section class="card stack">
@@ -543,10 +533,6 @@
       <section class="card stack">
         <div class="row-inline">
           <input id="kpiSearch" placeholder="Search by name..." />
-          <select id="kpiTeamFilter">
-            <option value="all">All teams</option>
-            ${teams.map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("")}
-          </select>
           <select id="kpiSortSel">
             ${SORTS.map(([v, l]) => `<option value="${v}" ${kpiSort === v ? "selected" : ""}>Sort: ${l}</option>`).join("")}
           </select>
@@ -556,7 +542,7 @@
           <article class="record" data-kpi-person="${p.id}" data-name="${escapeAttr((p.name || "").toLowerCase())}" data-team="${escapeAttr(p.team_id || "")}" style="cursor:pointer">
             <div class="record-top"><strong>${escapeHtml(p.name)}</strong><span class="pill blue">${money(a.revenue)}</span></div>
             <div class="meta-row">
-              <span>${escapeHtml(teamName(p.team_id))}</span>
+              <span>${escapeHtml(ROLE_LABELS[p.role] || p.role)}</span>
               <span>${a.doors} doors</span>
               <span>${a.perDay.toFixed(1)}/day</span>
               <span>${pct(a.closeRate)} close</span>
@@ -682,33 +668,91 @@
       <p class="muted" style="text-align:center">To edit this person's numbers or info, use the <b>People</b> tab.</p>`;
   }
 
-  // ── Teams tab ───────────────────────────────────────────────────
-  function renderTeams() {
+  // ── Downline tab (recruit family tree) ──────────────────────────
+  // Everyone is one org (Momentum). The tree is built purely from who
+  // recruited whom, rooted at the owner. Click a person to expand their
+  // downline; it animates open/closed without a full re-render.
+  let treeExpanded = null; // Set of expanded ids; null until first build
+
+  function orgRoot() {
+    return people.find((p) => p.role === "admin") || profile;
+  }
+  function downlineCountC(id, seen) {
+    seen = seen || new Set();
+    const name = (people.find((p) => p.id === id) || {}).name;
+    let n = 0;
+    childrenOfC(id, name).forEach((k) => { if (!seen.has(k.id)) { seen.add(k.id); n += 1 + downlineCountC(k.id, seen); } });
+    return n;
+  }
+  function childrenOfC(id, name) {
+    return people
+      .filter((p) => p.id !== id && (p.recruited_by === id || (!p.recruited_by && p.recruited_by_name && name && p.recruited_by_name === name)))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  }
+  function treeNodeC(p, depth, seen) {
+    if (seen.has(p.id)) return "";
+    seen.add(p.id);
+    const kids = childrenOfC(p.id, p.name);
+    const isRoot = depth === 0;
+    // Default state: root open, everyone else collapsed.
+    const open = treeExpanded ? treeExpanded.has(p.id) : isRoot;
+    const total = downlineCountC(p.id);
+    const s = personStats(p.id, null);
     return `
-      <div class="section-title"><h2>Teams</h2><span>${teams.length} total</span></div>
-      ${perms.canTeams ? `
-      <section class="card stack">
-        <div class="section-title"><h3>Create a Team</h3><span>gets its own join code</span></div>
-        <div class="row-inline">
-          <input id="newTeamName" placeholder="Team name, e.g. Desert Hawks" />
-          <button id="createTeam" class="blue" type="button">Create</button>
-        </div>
-      </section>` : ""}
-      ${teams.map((t) => {
-        const members = people.filter((p) => p.team_id === t.id);
-        const mstats = aggregate(logs.filter((l) => members.some((m) => m.id === l.user_id)));
-        return `
-        <section class="card stack">
-          <div class="section-title"><h3>${escapeHtml(t.name)}</h3><span>${members.length} member${members.length === 1 ? "" : "s"}</span></div>
-          <div class="meta-row"><span>Join code: <b>${escapeHtml(t.short_code || "—")}</b></span><span>${mstats.doors} doors</span><span>${money(mstats.revenue)}</span></div>
-          ${perms.canTeams ? `
-          <div class="row-inline">
-            <input data-rename-input="${t.id}" value="${escapeAttr(t.name)}" />
-            <button class="secondary" data-rename-team="${t.id}" type="button">Rename</button>
+      <div class="tree-node">
+        <div class="tree-row ${isRoot ? "me" : ""} ${kids.length ? "has-kids" : ""}" ${kids.length ? `data-tree-toggle="${p.id}"` : ""}>
+          <span class="tree-caret ${kids.length ? (open ? "open" : "") : "leaf"}" ${kids.length ? `data-caret="${p.id}"` : ""}>${kids.length ? "▸" : "•"}</span>
+          <div class="tree-card">
+            <div class="tree-top">
+              <span class="tree-name">${escapeHtml(p.name)}${isRoot ? " (you)" : ""}</span>
+              <button class="tree-open" data-view-person="${p.id}" type="button" title="Open profile">↗</button>
+            </div>
+            <div class="tree-meta">
+              <span class="pill">${escapeHtml(ROLE_LABELS[p.role] || p.role)}</span>
+              ${kids.length ? `<span>${kids.length} direct</span>` : ""}
+              ${total ? `<span>${total} total</span>` : ""}
+              <span>${s.doors} doors</span>
+              <span>${money(s.revenue)}</span>
+            </div>
           </div>
-          ${members.length ? "" : `<button class="danger" data-delete-team="${t.id}" type="button">Delete empty team</button>`}` : ""}
-        </section>`;
-      }).join("")}`;
+        </div>
+        ${kids.length ? `
+          <div class="tree-children ${open ? "open" : ""}" data-children="${p.id}">
+            <div class="tree-children-inner">${kids.map((k) => treeNodeC(k, depth + 1, seen)).join("")}</div>
+          </div>` : ""}
+      </div>`;
+  }
+  function renderDownline() {
+    const root = orgRoot();
+    const total = downlineCountC(root.id);
+    return `
+      <div class="section-title"><h2>Downline</h2><span>${total} in the org</span></div>
+      <div class="range-chips" style="margin-bottom:10px">
+        <button id="treeExpandAll" type="button">Expand all</button>
+        <button id="treeCollapseAll" type="button">Collapse all</button>
+      </div>
+      <section class="card tree-wrap">
+        ${treeNodeC(root, 0, new Set())}
+      </section>
+      <p class="muted" style="text-align:center;margin-top:8px">Built from who recruited whom. Set a person's recruiter in <b>People</b>.</p>`;
+  }
+  function bindDownlineEvents() {
+    if (activeTab !== "downline") return;
+    if (!treeExpanded) { treeExpanded = new Set([orgRoot().id]); }
+    // Toggle a node open/closed in place so the height animates smoothly.
+    document.querySelectorAll("[data-tree-toggle]").forEach((el) =>
+      el.addEventListener("click", (e) => {
+        if (e.target.closest("[data-view-person]")) return; // let the ↗ button through
+        const id = el.dataset.treeToggle;
+        const box = document.querySelector(`.tree-children[data-children="${id}"]`);
+        if (!box) return;
+        const nowOpen = box.classList.toggle("open");
+        const caret = document.querySelector(`.tree-caret[data-caret="${id}"]`);
+        if (caret) caret.classList.toggle("open", nowOpen);
+        if (nowOpen) treeExpanded.add(id); else treeExpanded.delete(id);
+      }));
+    bind("#treeExpandAll", "click", () => { treeExpanded = new Set(people.map((p) => p.id)); render(); });
+    bind("#treeCollapseAll", "click", () => { treeExpanded = new Set([orgRoot().id]); render(); });
   }
 
   // ── People tab ──────────────────────────────────────────────────
@@ -742,9 +786,8 @@
             <label>Full name <input id="npName" placeholder="Jane Doe" /></label>
             <label>Email <input id="npEmail" type="email" placeholder="jane@email.com" /></label>
             <label>Phone <input id="npPhone" placeholder="(555) 123-4567" /></label>
-            <label>Team <select id="npTeam">${teams.filter((t) => perms.isAdmin || t.id === profile.team_id).map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("")}</select></label>
             <label>Role <select id="npRole">${ROLE_OPTIONS.map((r) => `<option value="${r}">${ROLE_LABELS[r]}</option>`).join("")}</select></label>
-            <label>Direct recruit <select id="npRecruit">${recruitOptions(profile.id, null)}</select></label>
+            <label>Recruited by <select id="npRecruit">${recruitOptions(profile.id, null)}</select></label>
           </div>
           <button id="createPerson" class="blue" type="button">Create Account</button>
           <p class="muted" id="createPersonError" style="color:var(--danger)"></p>`}
@@ -753,10 +796,6 @@
         <div class="section-title"><h3>Everyone</h3><span>tap a person for details</span></div>
         <div class="row-inline">
           <input id="peopleSearch" placeholder="Search by name..." />
-          <select id="peopleTeamFilter">
-            <option value="all">All teams</option>
-            ${teams.map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("")}
-          </select>
         </div>
         ${rows.map((p) => {
           const s = personStats(p.id, null);
@@ -839,8 +878,7 @@
           <label>Phone <input id="pdPhone" value="${escapeAttr(p.phone || "")}" /></label>
           <label>Address <input id="pdAddress" value="${escapeAttr(p.address || "")}" /></label>
           <label>Role <select id="pdRole">${ROLE_OPTIONS.map((r) => `<option value="${r}" ${p.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select></label>
-          <label>Team <select id="pdTeam" ${perms.isAdmin ? "" : "disabled"}>${teams.map((t) => `<option value="${t.id}" ${p.team_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("")}</select></label>
-          <label>Direct recruit <select id="pdRecruit">${recruitOptions(p.recruited_by || "", p.id)}</select></label>
+          <label>Recruited by <select id="pdRecruit">${recruitOptions(p.recruited_by || "", p.id)}</select></label>
         </div>
         <div class="row-inline">
           <button id="pdSave" class="blue" type="button">Save Changes</button>
@@ -912,12 +950,8 @@
     // exports
     bind("#exportLogs", "click", exportLogsCsv);
     bind("#exportPeople", "click", exportPeopleCsv);
-    // teams
-    bind("#createTeam", "click", createTeam);
-    document.querySelectorAll("[data-rename-team]").forEach((b) =>
-      b.addEventListener("click", () => renameTeam(b.dataset.renameTeam)));
-    document.querySelectorAll("[data-delete-team]").forEach((b) =>
-      b.addEventListener("click", () => deleteTeam(b.dataset.deleteTeam)));
+    // downline
+    bindDownlineEvents();
     // people
     bind("#createPerson", "click", createPerson);
     bind("#dismissNewAccount", "click", () => { newAccountResult = null; render(); });
@@ -1003,11 +1037,11 @@
     const name = val("#npName").trim();
     const email = val("#npEmail").trim().toLowerCase();
     const phone = val("#npPhone").trim();
-    const team_id = val("#npTeam");
+    // One org (Momentum): everyone shares the owner's team behind the scenes.
+    const team_id = profile.team_id || (teams[0] && teams[0].id) || null;
     const role = val("#npRole");
     const recruitId = val("#npRecruit");
     if (!name || !email) { if (errEl) errEl.textContent = "Name and email are required."; return; }
-    if (!team_id) { if (errEl) errEl.textContent = "Create a team first."; return; }
 
     const btn = $("#createPerson");
     if (btn) { btn.disabled = true; btn.textContent = "Creating..."; }
@@ -1058,7 +1092,6 @@
       phone: val("#pdPhone").trim(),
       address: val("#pdAddress").trim(),
       role: val("#pdRole"),
-      team_id: val("#pdTeam"),
       recruited_by: recruiter ? recruiter.id : null,
       recruited_by_name: recruiter ? recruiter.name : "",
     };

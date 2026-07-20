@@ -398,3 +398,43 @@ h1, h2, h3,
 
 /* Reserve scrollbar space so content never shifts sideways on load */
 html { scrollbar-gutter: stable; overflow-y: scroll; }
+
+/* ── Downline tree (recruit family tree) ── */
+.tree-wrap { padding: 12px 10px; overflow-x: auto; }
+.tree-node { position: relative; }
+.tree-row {
+  display: flex; align-items: flex-start; gap: 8px; padding: 7px 6px;
+  border-radius: 12px; transition: background 0.15s ease; cursor: default;
+}
+.tree-row.has-kids { cursor: pointer; }
+@media (hover: hover) { .tree-row.has-kids:hover { background: var(--panel-2); } }
+.tree-caret {
+  flex: 0 0 auto; width: 18px; text-align: center; color: var(--muted);
+  font-size: 12px; margin-top: 3px; transition: transform 0.22s ease; user-select: none;
+}
+.tree-caret.open { transform: rotate(90deg); }
+.tree-caret.leaf { color: var(--core-blue); font-size: 15px; }
+.tree-card { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.tree-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tree-name { font-weight: 800; font-size: 14.5px; letter-spacing: -0.01em; }
+.tree-row.me .tree-name { color: var(--core-blue); }
+.tree-open {
+  flex: 0 0 auto; border: 1px solid var(--line); background: var(--panel);
+  color: var(--core-blue); border-radius: 8px; width: 26px; height: 26px;
+  font-size: 14px; cursor: pointer; line-height: 1; padding: 0;
+}
+@media (hover: hover) { .tree-open:hover { background: var(--panel-2); } }
+.tree-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--muted); font-weight: 600; }
+.tree-meta .pill { padding: 1px 8px; font-size: 10.5px; }
+/* indented children with a connector line, animated open/closed */
+.tree-children {
+  margin-left: 17px; padding-left: 14px; border-left: 2px solid var(--line);
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s ease;
+}
+.tree-children.open { grid-template-rows: 1fr; }
+.tree-children-inner { overflow: hidden; min-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .tree-children { transition: none; }
+  .tree-caret { transition: none; }
+}
