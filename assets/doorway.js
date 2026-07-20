@@ -1337,6 +1337,13 @@
           <div><h2>Settings</h2><span>Signed in as ${escapeHtml(profile.name)}.</span></div>
         </div>
         <section class="card stack">
+          <div class="section-title"><h3>Today's Goals</h3><span>${escapeHtml(dateLabel(new Date()))}</span></div>
+          ${dailyGoals
+            ? `<div class="meta-row"><span><b>${dailyGoals.door_goal}</b> doors</span><span><b>${money(dailyGoals.rev_goal)}</b> revenue</span></div>`
+            : `<p class="muted">You haven't set today's goals yet.</p>`}
+          <button id="openDailyGoals" class="secondary" type="button">${dailyGoals ? "Update today's goals" : "Set today's goals"}</button>
+        </section>
+        <section class="card stack">
           <div class="section-title"><h3>My Info</h3><span>Visible to your team</span></div>
           <label>Name <input id="infoName" value="${escapeAttr(profile.name)}" /></label>
           <label>Birthday <input id="infoBirthday" type="date" value="${escapeAttr(profile.birthday || "")}" /></label>
@@ -1672,6 +1679,7 @@
     bind("#saveSettings", "click", saveSettings);
     bind("#addBackfill", "click", addBackfillEntry);
     bind("#saveMyInfo", "click", saveMyInfo);
+    bind("#openDailyGoals", "click", () => { showDailyGoals = true; render(); });
     bind("#copyTeamId", "click", () => {
       const input = document.querySelector("#teamIdDisplay");
       if (input) { navigator.clipboard.writeText(input.value).catch(() => {}); }
